@@ -6,8 +6,8 @@
     "description": "Manages the full appointment lifecycle: creation, retrieval, cancellation, and rescheduling."
   },
   "servers": [
-    { "url": "http://localhost:8005", "description": "Local" },
-    { "url": "https://bookings.healthcare.example.com/v1", "description": "Production" }
+    { "url": "http://localhost:8080", "description": "Local" },
+    { "url": "https://api.healthcare.example.com", "description": "Production" }
   ],
   "tags": [{ "name": "Bookings" }],
   "paths": {

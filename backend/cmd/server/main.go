@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
-	"sync"
+	"os"
 
 	"github.com/healthcare/booking/internal/availability"
 	"github.com/healthcare/booking/internal/booking"
@@ -15,25 +15,39 @@ import (
 	"github.com/healthcare/booking/pkg/middleware"
 )
 
-// Service port allocation
+// All 7 APIs are served from a single port.
+// Each API still has its own OpenAPI spec; they all share the same base URL.
 //
-//   8001 — Patients API
-//   8002 — Treatments API
-//   8003 — Providers API
-//   8004 — Availability API
-//   8005 — Bookings API
-//   8006 — Pricing API
-//   8007 — Notifications API
+//   http://localhost:8080
+//     POST   /patients
+//     GET    /patients/{patientId}
+//     GET    /treatments/search
+//     GET    /treatments/{treatmentId}
+//     GET    /providers
+//     GET    /providers/{providerId}
+//     GET    /providers/{providerId}/availability
+//     GET    /pricing/estimate
+//     POST   /bookings
+//     GET    /bookings/{bookingId}
+//     POST   /bookings/{bookingId}/cancel
+//     POST   /bookings/{bookingId}/reschedule
+//     POST   /notifications/confirmation
 
 func main() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	addr := ":" + port
+
 	// ------------------------------------------------------------------ //
-	// Initialise stores
+	// Stores
 	// ------------------------------------------------------------------ //
-	patientStore      := patient.NewStore()
-	treatmentStore    := treatment.NewStore()
-	providerStore     := provider.NewStore()
-	availStore        := availability.NewStore()
-	bookingStore      := booking.NewStore()
+	patientStore   := patient.NewStore()
+	treatmentStore := treatment.NewStore()
+	providerStore  := provider.NewStore()
+	availStore     := availability.NewStore()
+	bookingStore   := booking.NewStore()
 
 	// ------------------------------------------------------------------ //
 	// Seed reference data
@@ -43,50 +57,48 @@ func main() {
 	availability.Seed(availStore)
 
 	// ------------------------------------------------------------------ //
-	// Build handlers (booking and notification take cross-store deps)
+	// Handlers
 	// ------------------------------------------------------------------ //
-	patientHandler      := patient.NewHandler(patientStore)
-	treatmentHandler    := treatment.NewHandler(treatmentStore)
-	providerHandler     := provider.NewHandler(providerStore)
-	availHandler        := availability.NewHandler(availStore)
-	bookingHandler      := booking.NewHandler(bookingStore, availStore)
-	pricingHandler      := pricing.NewHandler(treatmentStore, providerStore)
-	notificationHandler := notification.NewHandler(bookingStore)
+	patientH      := patient.NewHandler(patientStore)
+	treatmentH    := treatment.NewHandler(treatmentStore)
+	providerH     := provider.NewHandler(providerStore)
+	availH        := availability.NewHandler(availStore)
+	bookingH      := booking.NewHandler(bookingStore, availStore)
+	pricingH      := pricing.NewHandler(treatmentStore, providerStore)
+	notificationH := notification.NewHandler(bookingStore)
 
 	// ------------------------------------------------------------------ //
-	// Register service servers
+	// Single shared mux — all 7 APIs register their routes here
 	// ------------------------------------------------------------------ //
-	services := []struct {
-		name string
-		addr string
-		mux  *http.ServeMux
-	}{
-		{"Patients API",      ":8001", patientHandler.Routes()},
-		{"Treatments API",    ":8002", treatmentHandler.Routes()},
-		{"Providers API",     ":8003", providerHandler.Routes()},
-		{"Availability API",  ":8004", availHandler.Routes()},
-		{"Bookings API",      ":8005", bookingHandler.Routes()},
-		{"Pricing API",       ":8006", pricingHandler.Routes()},
-		{"Notifications API", ":8007", notificationHandler.Routes()},
+	mux := http.NewServeMux()
+
+	patientH.Register(mux)
+	treatmentH.Register(mux)
+	providerH.Register(mux)
+	availH.Register(mux)
+	bookingH.Register(mux)
+	pricingH.Register(mux)
+	notificationH.Register(mux)
+
+	// ------------------------------------------------------------------ //
+	// Single server
+	// ------------------------------------------------------------------ //
+	handler := middleware.Chain(mux,
+		middleware.Logger,
+		middleware.CORS,
+		middleware.JSON,
+	)
+
+	log.Printf("Healthcare API listening on %s", addr)
+	log.Printf("  Patients API       → POST/GET  /patients")
+	log.Printf("  Treatments API     → GET        /treatments/search  /treatments/{id}")
+	log.Printf("  Providers API      → GET        /providers  /providers/{id}")
+	log.Printf("  Availability API   → GET        /providers/{id}/availability")
+	log.Printf("  Pricing API        → GET        /pricing/estimate")
+	log.Printf("  Bookings API       → POST/GET   /bookings  /bookings/{id}")
+	log.Printf("  Notifications API  → POST       /notifications/confirmation")
+
+	if err := http.ListenAndServe(addr, handler); err != nil {
+		log.Fatalf("Server failed: %v", err)
 	}
-
-	var wg sync.WaitGroup
-	for _, svc := range services {
-		svc := svc
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			handler := middleware.Chain(svc.mux,
-				middleware.Logger,
-				middleware.CORS,
-				middleware.JSON,
-			)
-			log.Printf("Starting %s on %s", svc.name, svc.addr)
-			if err := http.ListenAndServe(svc.addr, handler); err != nil {
-				log.Fatalf("%s failed: %v", svc.name, err)
-			}
-		}()
-	}
-
-	wg.Wait()
 }

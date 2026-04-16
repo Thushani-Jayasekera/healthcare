@@ -6,8 +6,8 @@
     "description": "Manages patient records including creation, profile retrieval, and insurance information."
   },
   "servers": [
-    { "url": "http://localhost:8001", "description": "Local" },
-    { "url": "https://patients.healthcare.example.com/v1", "description": "Production" }
+    { "url": "http://localhost:8080", "description": "Local" },
+    { "url": "https://api.healthcare.example.com", "description": "Production" }
   ],
   "tags": [{ "name": "Patients" }],
   "paths": {

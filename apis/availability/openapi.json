@@ -6,8 +6,8 @@
     "description": "Returns available appointment time slots for a given provider, optionally filtered by treatment duration requirements."
   },
   "servers": [
-    { "url": "http://localhost:8004", "description": "Local" },
-    { "url": "https://availability.healthcare.example.com/v1", "description": "Production" }
+    { "url": "http://localhost:8080", "description": "Local" },
+    { "url": "https://api.healthcare.example.com", "description": "Production" }
   ],
   "tags": [{ "name": "Availability" }],
   "paths": {

@@ -98,7 +98,7 @@ func Seed(s *Store) {
 			TreatmentID:        "t1000000-0001-0001-0001-000000000001",
 			Name:               "Lumbar Spinal Decompression",
 			Specialty:          "Orthopedics",
-			Description:        "Surgical procedure to relieve pressure on spinal nerves caused by herniated discs or bone spurs.",
+			Description:        "Surgical procedure to relieve pressure on spinal nerves caused by herniated discs, bone spurs, or chronic back pain.",
 			DurationMin:        90,
 			ProcedureCodes:     []string{"MBS-51011"},
 			Prerequisites:      []string{"GP referral required", "MRI within 12 months"},

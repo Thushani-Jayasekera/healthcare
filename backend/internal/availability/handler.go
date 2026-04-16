@@ -15,10 +15,8 @@ func NewHandler(s *Store) *Handler {
 	return &Handler{store: s}
 }
 
-func (h *Handler) Routes() *http.ServeMux {
-	mux := http.NewServeMux()
+func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /providers/{providerId}/availability", h.GetAvailability)
-	return mux
 }
 
 // GET /providers/{providerId}/availability?date_from=&date_to=&treatment_id=

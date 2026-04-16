@@ -20,10 +20,8 @@ func NewHandler(b *booking.Store) *Handler {
 	return &Handler{bookings: b}
 }
 
-func (h *Handler) Routes() *http.ServeMux {
-	mux := http.NewServeMux()
+func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /notifications/confirmation", h.SendConfirmation)
-	return mux
 }
 
 // POST /notifications/confirmation

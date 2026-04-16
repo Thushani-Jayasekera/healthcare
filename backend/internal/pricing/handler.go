@@ -51,10 +51,8 @@ func NewHandler(t *treatment.Store, p *provider.Store) *Handler {
 	return &Handler{treatments: t, providers: p}
 }
 
-func (h *Handler) Routes() *http.ServeMux {
-	mux := http.NewServeMux()
+func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /pricing/estimate", h.GetEstimate)
-	return mux
 }
 
 // GET /pricing/estimate?treatment_id=&provider_id=&patient_id=

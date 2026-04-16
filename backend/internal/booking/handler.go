@@ -21,13 +21,11 @@ func NewHandler(s *Store, av *availability.Store) *Handler {
 	return &Handler{store: s, availStore: av}
 }
 
-func (h *Handler) Routes() *http.ServeMux {
-	mux := http.NewServeMux()
+func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /bookings", h.CreateBooking)
 	mux.HandleFunc("GET /bookings/{bookingId}", h.GetBooking)
 	mux.HandleFunc("POST /bookings/{bookingId}/cancel", h.CancelBooking)
 	mux.HandleFunc("POST /bookings/{bookingId}/reschedule", h.RescheduleBooking)
-	return mux
 }
 
 // POST /bookings

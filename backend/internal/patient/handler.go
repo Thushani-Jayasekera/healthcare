@@ -19,11 +19,9 @@ func NewHandler(s *Store) *Handler {
 	return &Handler{store: s}
 }
 
-func (h *Handler) Routes() *http.ServeMux {
-	mux := http.NewServeMux()
+func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /patients", h.CreatePatient)
 	mux.HandleFunc("GET /patients/{patientId}", h.GetPatient)
-	return mux
 }
 
 // POST /patients

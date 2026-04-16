@@ -6,8 +6,8 @@
     "description": "Returns real-time cost estimates for a treatment at a specific provider, including Medicare rebate and private health insurance benefit calculations."
   },
   "servers": [
-    { "url": "http://localhost:8006", "description": "Local" },
-    { "url": "https://pricing.healthcare.example.com/v1", "description": "Production" }
+    { "url": "http://localhost:8080", "description": "Local" },
+    { "url": "https://api.healthcare.example.com", "description": "Production" }
   ],
   "tags": [{ "name": "Pricing" }],
   "paths": {

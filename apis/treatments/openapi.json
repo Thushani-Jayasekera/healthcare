@@ -6,8 +6,8 @@
     "description": "Provides treatment discovery by condition or specialty, and detailed clinical information per treatment."
   },
   "servers": [
-    { "url": "http://localhost:8002", "description": "Local" },
-    { "url": "https://treatments.healthcare.example.com/v1", "description": "Production" }
+    { "url": "http://localhost:8080", "description": "Local" },
+    { "url": "https://api.healthcare.example.com", "description": "Production" }
   ],
   "tags": [{ "name": "Treatments" }],
   "paths": {

@@ -6,8 +6,8 @@
     "description": "Discovers and retrieves doctors, clinics, and hospitals by specialty and location."
   },
   "servers": [
-    { "url": "http://localhost:8003", "description": "Local" },
-    { "url": "https://providers.healthcare.example.com/v1", "description": "Production" }
+    { "url": "http://localhost:8080", "description": "Local" },
+    { "url": "https://api.healthcare.example.com", "description": "Production" }
   ],
   "tags": [{ "name": "Providers" }],
   "paths": {

@@ -6,8 +6,8 @@
     "description": "Sends booking confirmation messages via email and/or SMS. Requests are accepted asynchronously (202) and delivered via an internal queue."
   },
   "servers": [
-    { "url": "http://localhost:8007", "description": "Local" },
-    { "url": "https://notifications.healthcare.example.com/v1", "description": "Production" }
+    { "url": "http://localhost:8080", "description": "Local" },
+    { "url": "https://api.healthcare.example.com", "description": "Production" }
   ],
   "tags": [{ "name": "Notifications" }],
   "paths": {
