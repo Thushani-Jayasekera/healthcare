@@ -1,0 +1,168 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Provider API",
+    "version": "1.0.0",
+    "description": "Discovers and retrieves doctors, clinics, and hospitals by specialty and location."
+  },
+  "servers": [
+    { "url": "http://localhost:8003", "description": "Local" },
+    { "url": "https://providers.healthcare.example.com/v1", "description": "Production" }
+  ],
+  "tags": [{ "name": "Providers" }],
+  "paths": {
+    "/providers": {
+      "get": {
+        "tags": ["Providers"],
+        "operationId": "listProviders",
+        "summary": "List providers matching specialty and location",
+        "parameters": [
+          {
+            "name": "specialty",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "example": "Orthopedics"
+          },
+          {
+            "name": "location",
+            "in": "query",
+            "schema": { "type": "string" },
+            "example": "Sydney"
+          },
+          {
+            "name": "radius_km",
+            "in": "query",
+            "schema": { "type": "number", "default": 25 }
+          },
+          {
+            "name": "accepting_new_patients",
+            "in": "query",
+            "schema": { "type": "boolean", "default": true }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 10, "maximum": 50 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching providers",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ProviderListResponse" } }
+            }
+          },
+          "400": {
+            "description": "specialty is required",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/BadRequestError" } }
+            }
+          }
+        }
+      }
+    },
+    "/providers/{providerId}": {
+      "get": {
+        "tags": ["Providers"],
+        "operationId": "getProvider",
+        "summary": "Get full details for a specific provider",
+        "parameters": [
+          {
+            "name": "providerId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Provider details",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Provider" } }
+            }
+          },
+          "404": {
+            "description": "Provider not found",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/NotFoundError" } }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ProviderListResponse": {
+        "type": "object",
+        "properties": {
+          "total": { "type": "integer" },
+          "page":  { "type": "integer" },
+          "limit": { "type": "integer" },
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/ProviderSummary" } }
+        }
+      },
+      "ProviderSummary": {
+        "type": "object",
+        "properties": {
+          "provider_id":            { "type": "string", "format": "uuid" },
+          "name":                   { "type": "string", "example": "Dr. Marcus Chen" },
+          "type":                   { "type": "string", "enum": ["doctor","hospital","clinic"] },
+          "specialty":              { "type": "string" },
+          "location":               { "$ref": "#/components/schemas/Address" },
+          "rating":                 { "type": "number", "format": "float", "example": 4.7 },
+          "accepting_new_patients": { "type": "boolean" },
+          "distance_km":            { "type": "number", "example": 3.2 }
+        }
+      },
+      "Provider": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ProviderSummary" },
+          {
+            "type": "object",
+            "properties": {
+              "qualifications":   { "type": "array", "items": { "type": "string" }, "example": ["MBBS","FRACS (Ortho)"] },
+              "languages":        { "type": "array", "items": { "type": "string" }, "example": ["English","Mandarin"] },
+              "phone":            { "type": "string" },
+              "email":            { "type": "string", "format": "email" },
+              "website":          { "type": "string", "format": "uri" },
+              "accepted_funds":   { "type": "array", "items": { "type": "string" } },
+              "services":         { "type": "array", "items": { "type": "string" } },
+              "consultation_fee": { "type": "number", "example": 280.00 }
+            }
+          }
+        ]
+      },
+      "Address": {
+        "type": "object",
+        "properties": {
+          "street":   { "type": "string" },
+          "city":     { "type": "string" },
+          "state":    { "type": "string" },
+          "postcode": { "type": "string" },
+          "country":  { "type": "string" }
+        }
+      },
+      "BadRequestError": {
+        "type": "object",
+        "properties": {
+          "error":   { "type": "string" },
+          "message": { "type": "string" }
+        }
+      },
+      "NotFoundError": {
+        "type": "object",
+        "properties": {
+          "error":   { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  }
+}

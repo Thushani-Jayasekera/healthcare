@@ -1,0 +1,146 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Treatment API",
+    "version": "1.0.0",
+    "description": "Provides treatment discovery by condition or specialty, and detailed clinical information per treatment."
+  },
+  "servers": [
+    { "url": "http://localhost:8002", "description": "Local" },
+    { "url": "https://treatments.healthcare.example.com/v1", "description": "Production" }
+  ],
+  "tags": [{ "name": "Treatments" }],
+  "paths": {
+    "/treatments/search": {
+      "get": {
+        "tags": ["Treatments"],
+        "operationId": "searchTreatments",
+        "summary": "Search treatments by condition or specialty",
+        "parameters": [
+          {
+            "name": "condition",
+            "in": "query",
+            "description": "Patient condition or symptom keywords",
+            "schema": { "type": "string" },
+            "example": "lower back pain"
+          },
+          {
+            "name": "specialty",
+            "in": "query",
+            "description": "Medical specialty filter",
+            "schema": { "type": "string" },
+            "example": "Orthopedics"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "default": 1, "minimum": 1 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 10, "minimum": 1, "maximum": 50 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of matching treatments",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TreatmentSearchResponse" } }
+            }
+          },
+          "400": {
+            "description": "At least one of condition or specialty must be provided",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/BadRequestError" } }
+            }
+          }
+        }
+      }
+    },
+    "/treatments/{treatmentId}": {
+      "get": {
+        "tags": ["Treatments"],
+        "operationId": "getTreatment",
+        "summary": "Get full details for a specific treatment",
+        "parameters": [
+          {
+            "name": "treatmentId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Treatment details",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Treatment" } }
+            }
+          },
+          "404": {
+            "description": "Treatment not found",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/NotFoundError" } }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "TreatmentSearchResponse": {
+        "type": "object",
+        "properties": {
+          "total": { "type": "integer", "example": 3 },
+          "page":  { "type": "integer", "example": 1 },
+          "limit": { "type": "integer", "example": 10 },
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/TreatmentSummary" }
+          }
+        }
+      },
+      "TreatmentSummary": {
+        "type": "object",
+        "properties": {
+          "treatment_id": { "type": "string", "format": "uuid" },
+          "name":         { "type": "string", "example": "Lumbar Spinal Decompression" },
+          "specialty":    { "type": "string", "example": "Orthopedics" },
+          "description":  { "type": "string" },
+          "duration_min": { "type": "integer", "example": 60 }
+        }
+      },
+      "Treatment": {
+        "allOf": [
+          { "$ref": "#/components/schemas/TreatmentSummary" },
+          {
+            "type": "object",
+            "properties": {
+              "procedure_codes":         { "type": "array", "items": { "type": "string" }, "example": ["MBS-51011"] },
+              "prerequisites":           { "type": "array", "items": { "type": "string" }, "example": ["GP referral required"] },
+              "typical_recovery_days":   { "type": "integer", "example": 14 },
+              "related_specialties":     { "type": "array", "items": { "type": "string" } },
+              "updated_at":              { "type": "string", "format": "date-time" }
+            }
+          }
+        ]
+      },
+      "BadRequestError": {
+        "type": "object",
+        "properties": {
+          "error":   { "type": "string", "example": "bad_request" },
+          "message": { "type": "string" }
+        }
+      },
+      "NotFoundError": {
+        "type": "object",
+        "properties": {
+          "error":   { "type": "string", "example": "not_found" },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  }
+}

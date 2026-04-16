@@ -1,0 +1,95 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Pricing API",
+    "version": "1.0.0",
+    "description": "Returns real-time cost estimates for a treatment at a specific provider, including Medicare rebate and private health insurance benefit calculations."
+  },
+  "servers": [
+    { "url": "http://localhost:8006", "description": "Local" },
+    { "url": "https://pricing.healthcare.example.com/v1", "description": "Production" }
+  ],
+  "tags": [{ "name": "Pricing" }],
+  "paths": {
+    "/pricing/estimate": {
+      "get": {
+        "tags": ["Pricing"],
+        "operationId": "getPricingEstimate",
+        "summary": "Get cost estimate for a treatment at a provider",
+        "parameters": [
+          {
+            "name": "treatment_id",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "provider_id",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "patient_id",
+            "in": "query",
+            "description": "When provided, applies the patient's insurance fund benefits to the estimate",
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pricing estimate",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/PricingEstimate" } }
+            }
+          },
+          "400": {
+            "description": "treatment_id and provider_id are required",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/BadRequestError" } }
+            }
+          },
+          "404": {
+            "description": "Treatment or provider not found",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/NotFoundError" } }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PricingEstimate": {
+        "type": "object",
+        "properties": {
+          "treatment_id":      { "type": "string", "format": "uuid" },
+          "provider_id":       { "type": "string", "format": "uuid" },
+          "currency":          { "type": "string", "example": "AUD" },
+          "gross_fee":         { "type": "number", "example": 1200.00 },
+          "medicare_rebate":   { "type": "number", "example": 420.00 },
+          "insurance_benefit": { "type": "number", "example": 350.00 },
+          "estimated_gap":     { "type": "number", "example": 430.00 },
+          "out_of_pocket":     { "type": "number", "example": 430.00 },
+          "disclaimer":        { "type": "string", "example": "This is an estimate only. Final costs depend on clinical decisions made during the procedure." },
+          "valid_until":       { "type": "string", "format": "date-time" }
+        }
+      },
+      "BadRequestError": {
+        "type": "object",
+        "properties": {
+          "error":   { "type": "string" },
+          "message": { "type": "string" }
+        }
+      },
+      "NotFoundError": {
+        "type": "object",
+        "properties": {
+          "error":   { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  }
+}

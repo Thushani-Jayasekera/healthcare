@@ -1,0 +1,483 @@
+arazzo: "1.0.0"
+
+info:
+  title: Specialist Treatment Booking Workflow
+  version: "1.0.0"
+  description: >
+    Orchestrates the full patient journey across 7 independent APIs.
+    Each sourceDescription maps to a separate OpenAPI spec with its own server.
+
+# ---------------------------------------------------------------------------
+# Source API references — each points to its own OpenAPI file
+# ---------------------------------------------------------------------------
+sourceDescriptions:
+  - name: treatmentsApi
+    url: ./apis/treatments/openapi.json
+    type: openapi
+  - name: providersApi
+    url: ./apis/providers/openapi.json
+    type: openapi
+  - name: availabilityApi
+    url: ./apis/availability/openapi.json
+    type: openapi
+  - name: pricingApi
+    url: ./apis/pricing/openapi.json
+    type: openapi
+  - name: patientsApi
+    url: ./apis/patients/openapi.json
+    type: openapi
+  - name: bookingsApi
+    url: ./apis/bookings/openapi.json
+    type: openapi
+  - name: notificationsApi
+    url: ./apis/notifications/openapi.json
+    type: openapi
+
+# ---------------------------------------------------------------------------
+# Workflow
+# ---------------------------------------------------------------------------
+workflows:
+  - workflowId: bookSpecialistTreatment
+    summary: End-to-end specialist treatment booking across 7 independent APIs
+    description: >
+      Accepts patient demographics, a clinical condition, and a preferred
+      location + date range. Walks through treatment discovery → provider
+      selection → slot availability → pricing → patient record → booking →
+      confirmation.
+
+    # -----------------------------------------------------------------------
+    # Inputs
+    # -----------------------------------------------------------------------
+    inputs:
+      type: object
+      required:
+        - patient
+        - condition
+        - preferred_location
+        - preferred_date_from
+        - preferred_date_to
+      properties:
+        patient:
+          type: object
+          required: [first_name, last_name, date_of_birth, email, phone]
+          properties:
+            first_name:    { type: string }
+            last_name:     { type: string }
+            date_of_birth: { type: string, format: date }
+            email:         { type: string, format: email }
+            phone:         { type: string }
+            address:
+              type: object
+              properties:
+                street:   { type: string }
+                city:     { type: string }
+                state:    { type: string }
+                postcode: { type: string }
+                country:  { type: string }
+            insurance:
+              type: object
+              properties:
+                fund_name:    { type: string }
+                member_id:    { type: string }
+                policy_level: { type: string }
+        condition:
+          type: string
+          example: "chronic lower back pain radiating to left leg"
+        specialty:
+          type: string
+          description: Optional specialty override
+          example: "Orthopedics"
+        preferred_location:
+          type: string
+          example: "Sydney"
+        preferred_date_from:
+          type: string
+          format: date
+          example: "2026-05-01"
+        preferred_date_to:
+          type: string
+          format: date
+          example: "2026-05-31"
+        notification_channels:
+          type: array
+          items: { type: string, enum: [email, sms] }
+          default: [email, sms]
+
+    # -----------------------------------------------------------------------
+    # Steps
+    # -----------------------------------------------------------------------
+    steps:
+
+      # ======================================================================
+      # STEP 1 — Identify Treatment
+      # API: Treatments API (port 8002)
+      # ======================================================================
+      - stepId: identifyTreatment
+        description: Search the Treatments API for treatments matching the condition/specialty.
+        operationId: $sourceDescriptions.treatmentsApi#searchTreatments
+        parameters:
+          - name: condition
+            in: query
+            value: $inputs.condition
+          - name: specialty
+            in: query
+            value: $inputs.specialty
+          - name: limit
+            in: query
+            value: 5
+
+        successCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body.total > 0
+            context: $response.body
+            type: jsonpath
+
+        outputs:
+          treatment_id:   $response.body.items[0].treatment_id
+          treatment_name: $response.body.items[0].name
+          specialty:      $response.body.items[0].specialty
+          duration_min:   $response.body.items[0].duration_min
+
+        onSuccess:
+          - name: proceedToProviders
+            type: goto
+            stepId: findProviders
+
+        onFailure:
+          - name: noTreatmentFound
+            type: end
+            criteria:
+              - condition: $response.body.total == 0
+                context: $response.body
+                type: jsonpath
+            outputs:
+              error_code:    "TREATMENT_NOT_FOUND"
+              error_message: "No treatments matched. Refine condition keywords or specialty."
+          - name: treatmentSearchError
+            type: end
+            criteria:
+              - condition: $statusCode >= 400
+            outputs:
+              error_code:    "TREATMENT_SEARCH_ERROR"
+              error_message: "Treatments API unavailable. Try again later."
+
+      # ======================================================================
+      # STEP 2 — Find Providers
+      # API: Providers API (port 8003)
+      # ======================================================================
+      - stepId: findProviders
+        description: Find doctors/hospitals offering the identified specialty near the patient.
+        operationId: $sourceDescriptions.providersApi#listProviders
+        parameters:
+          - name: specialty
+            in: query
+            value: $steps.identifyTreatment.outputs.specialty
+          - name: location
+            in: query
+            value: $inputs.preferred_location
+          - name: accepting_new_patients
+            in: query
+            value: true
+          - name: limit
+            in: query
+            value: 10
+
+        successCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body.total > 0
+            context: $response.body
+            type: jsonpath
+
+        outputs:
+          provider_id:       $response.body.items[0].provider_id
+          provider_name:     $response.body.items[0].name
+          provider_type:     $response.body.items[0].type
+          provider_location: $response.body.items[0].location
+          provider_rating:   $response.body.items[0].rating
+          all_providers:     $response.body.items
+
+        onSuccess:
+          - name: proceedToAvailability
+            type: goto
+            stepId: checkAvailability
+
+        onFailure:
+          - name: noProvidersFound
+            type: end
+            criteria:
+              - condition: $response.body.total == 0
+                context: $response.body
+                type: jsonpath
+            outputs:
+              error_code:    "NO_PROVIDERS_FOUND"
+              error_message: "No providers found. Expand search radius or try another location."
+          - name: providerSearchError
+            type: end
+            criteria:
+              - condition: $statusCode >= 400
+            outputs:
+              error_code:    "PROVIDER_SEARCH_ERROR"
+              error_message: "Providers API unavailable. Try again later."
+
+      # ======================================================================
+      # STEP 3 — Check Availability
+      # API: Availability API (port 8004)
+      # ======================================================================
+      - stepId: checkAvailability
+        description: Get open slots for the chosen provider within the preferred date range.
+        operationId: $sourceDescriptions.availabilityApi#getProviderAvailability
+        parameters:
+          - name: providerId
+            in: path
+            value: $steps.findProviders.outputs.provider_id
+          - name: date_from
+            in: query
+            value: $inputs.preferred_date_from
+          - name: date_to
+            in: query
+            value: $inputs.preferred_date_to
+          - name: treatment_id
+            in: query
+            value: $steps.identifyTreatment.outputs.treatment_id
+
+        successCriteria:
+          - condition: $statusCode == 200
+          - condition: $response.body.slots.length > 0
+            context: $response.body
+            type: jsonpath
+
+        outputs:
+          slot_id:             $response.body.slots[0].slot_id
+          slot_start_time:     $response.body.slots[0].start_time
+          slot_end_time:       $response.body.slots[0].end_time
+          next_available_date: $response.body.next_available_date
+          all_slots:           $response.body.slots
+
+        onSuccess:
+          - name: proceedToPricing
+            type: goto
+            stepId: getPricing
+
+        onFailure:
+          - name: noSlotsInRange
+            type: end
+            criteria:
+              - condition: $response.body.slots.length == 0
+                context: $response.body
+                type: jsonpath
+            outputs:
+              error_code:       "NO_SLOTS_AVAILABLE"
+              error_message:    "No available slots in your preferred date range."
+              next_available:   $response.body.next_available_date
+              suggested_action: "Re-run from this step with a later date range, or choose a different provider."
+          - name: availabilityError
+            type: end
+            criteria:
+              - condition: $statusCode >= 400
+            outputs:
+              error_code:    "AVAILABILITY_CHECK_ERROR"
+              error_message: "Availability API unavailable. Try again later."
+
+      # ======================================================================
+      # STEP 4 — Get Pricing
+      # API: Pricing API (port 8006)
+      # Non-blocking: 404 is bypassed so booking can continue without pricing.
+      # ======================================================================
+      - stepId: getPricing
+        description: Estimate treatment cost at the selected provider.
+        operationId: $sourceDescriptions.pricingApi#getPricingEstimate
+        parameters:
+          - name: treatment_id
+            in: query
+            value: $steps.identifyTreatment.outputs.treatment_id
+          - name: provider_id
+            in: query
+            value: $steps.findProviders.outputs.provider_id
+
+        successCriteria:
+          - condition: $statusCode == 200
+
+        outputs:
+          gross_fee:           $response.body.gross_fee
+          medicare_rebate:     $response.body.medicare_rebate
+          insurance_benefit:   $response.body.insurance_benefit
+          out_of_pocket:       $response.body.out_of_pocket
+          currency:            $response.body.currency
+          pricing_valid_until: $response.body.valid_until
+
+        onSuccess:
+          - name: proceedToPatient
+            type: goto
+            stepId: createOrVerifyPatient
+
+        onFailure:
+          - name: pricingNotFound
+            type: goto
+            stepId: createOrVerifyPatient
+            criteria:
+              - condition: $statusCode == 404
+            # Non-fatal: pricing unavailable but booking continues
+          - name: pricingRetry
+            type: retry
+            retryAfter: 2
+            retryLimit: 2
+            criteria:
+              - condition: $statusCode >= 500
+          - name: pricingError
+            type: goto
+            stepId: createOrVerifyPatient
+            criteria:
+              - condition: $statusCode >= 400
+
+      # ======================================================================
+      # STEP 5 — Create or Verify Patient
+      # API: Patients API (port 8001)
+      # 409 = patient already exists; extract patient_id and proceed.
+      # ======================================================================
+      - stepId: createOrVerifyPatient
+        description: Create a new patient record, or identify an existing one by email (409).
+        operationId: $sourceDescriptions.patientsApi#createPatient
+        requestBody:
+          contentType: application/json
+          payload:
+            first_name:    $inputs.patient.first_name
+            last_name:     $inputs.patient.last_name
+            date_of_birth: $inputs.patient.date_of_birth
+            email:         $inputs.patient.email
+            phone:         $inputs.patient.phone
+            address:       $inputs.patient.address
+            insurance:     $inputs.patient.insurance
+
+        successCriteria:
+          - condition: $statusCode == 201 || $statusCode == 409
+
+        outputs:
+          patient_id:    $response.body.patient_id
+          patient_email: $response.body.email
+          patient_phone: $response.body.phone
+
+        onSuccess:
+          - name: proceedToBooking
+            type: goto
+            stepId: bookAppointment
+
+        onFailure:
+          - name: patientFailed
+            type: end
+            criteria:
+              - condition: $statusCode >= 400 && $statusCode != 409
+            outputs:
+              error_code:    "PATIENT_CREATION_FAILED"
+              error_message: "Could not create or verify patient record. Check the provided details."
+
+      # ======================================================================
+      # STEP 6 — Book Appointment
+      # API: Bookings API (port 8005)
+      # ======================================================================
+      - stepId: bookAppointment
+        description: Atomically confirm the appointment on the Bookings API.
+        operationId: $sourceDescriptions.bookingsApi#createBooking
+        requestBody:
+          contentType: application/json
+          payload:
+            patient_id:   $steps.createOrVerifyPatient.outputs.patient_id
+            provider_id:  $steps.findProviders.outputs.provider_id
+            treatment_id: $steps.identifyTreatment.outputs.treatment_id
+            slot_id:      $steps.checkAvailability.outputs.slot_id
+
+        successCriteria:
+          - condition: $statusCode == 201
+          - condition: $response.body.status == "confirmed"
+            context: $response.body
+            type: jsonpath
+
+        outputs:
+          booking_id:        $response.body.booking_id
+          confirmation_code: $response.body.confirmation_code
+          booking_status:    $response.body.status
+          booked_start_time: $response.body.start_time
+          booked_end_time:   $response.body.end_time
+
+        onSuccess:
+          - name: proceedToNotification
+            type: goto
+            stepId: sendConfirmation
+
+        onFailure:
+          - name: slotConflict
+            type: end
+            criteria:
+              - condition: $statusCode == 409
+            outputs:
+              error_code:       "SLOT_CONFLICT"
+              error_message:    "Slot was taken between availability check and booking."
+              suggested_action: "Re-run from checkAvailability to select a new slot."
+          - name: bookingRetry
+            type: retry
+            retryAfter: 3
+            retryLimit: 2
+            criteria:
+              - condition: $statusCode >= 500
+          - name: bookingFailed
+            type: end
+            criteria:
+              - condition: $statusCode >= 400 && $statusCode != 409
+            outputs:
+              error_code:    "BOOKING_FAILED"
+              error_message: "Booking could not be created. Contact support."
+
+      # ======================================================================
+      # STEP 7 — Send Confirmation
+      # API: Notifications API (port 8007)
+      # Best-effort: failure does not invalidate the booking.
+      # ======================================================================
+      - stepId: sendConfirmation
+        description: Dispatch booking confirmation email/SMS via the Notifications API.
+        operationId: $sourceDescriptions.notificationsApi#sendBookingConfirmation
+        requestBody:
+          contentType: application/json
+          payload:
+            booking_id: $steps.bookAppointment.outputs.booking_id
+            channels:   $inputs.notification_channels
+
+        successCriteria:
+          - condition: $statusCode == 202
+
+        outputs:
+          notification_id:     $response.body.notification_id
+          channels_sent:       $response.body.channels_sent
+          notification_status: $response.body.status
+
+        onSuccess:
+          - name: workflowComplete
+            type: end
+
+        onFailure:
+          - name: notifRetry
+            type: retry
+            retryAfter: 5
+            retryLimit: 3
+            criteria:
+              - condition: $statusCode >= 500
+          - name: notifFailed
+            type: end
+            criteria:
+              - condition: $statusCode >= 400
+            outputs:
+              warning_code:    "NOTIFICATION_FAILED"
+              warning_message: "Booking confirmed but notification could not be sent."
+
+    # -----------------------------------------------------------------------
+    # Workflow-level outputs
+    # -----------------------------------------------------------------------
+    outputs:
+      booking_id:          $steps.bookAppointment.outputs.booking_id
+      confirmation_code:   $steps.bookAppointment.outputs.confirmation_code
+      booking_status:      $steps.bookAppointment.outputs.booking_status
+      booked_start_time:   $steps.bookAppointment.outputs.booked_start_time
+      patient_id:          $steps.createOrVerifyPatient.outputs.patient_id
+      treatment_name:      $steps.identifyTreatment.outputs.treatment_name
+      provider_name:       $steps.findProviders.outputs.provider_name
+      out_of_pocket:       $steps.getPricing.outputs.out_of_pocket
+      currency:            $steps.getPricing.outputs.currency
+      notification_id:     $steps.sendConfirmation.outputs.notification_id

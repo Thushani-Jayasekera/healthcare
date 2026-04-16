@@ -1,0 +1,175 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Patient API",
+    "version": "1.0.0",
+    "description": "Manages patient records including creation, profile retrieval, and insurance information."
+  },
+  "servers": [
+    { "url": "http://localhost:8001", "description": "Local" },
+    { "url": "https://patients.healthcare.example.com/v1", "description": "Production" }
+  ],
+  "tags": [{ "name": "Patients" }],
+  "paths": {
+    "/patients": {
+      "post": {
+        "tags": ["Patients"],
+        "operationId": "createPatient",
+        "summary": "Create a new patient record",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreatePatientRequest" },
+              "example": {
+                "first_name": "Jane",
+                "last_name": "Smith",
+                "date_of_birth": "1985-03-22",
+                "email": "jane.smith@email.com",
+                "phone": "+61412345678",
+                "gender": "female",
+                "address": {
+                  "street": "42 Harbour St",
+                  "city": "Sydney",
+                  "state": "NSW",
+                  "postcode": "2000",
+                  "country": "AU"
+                },
+                "insurance": {
+                  "fund_name": "Medibank",
+                  "member_id": "MBK-9876543",
+                  "policy_level": "gold"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Patient created successfully",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Patient" } }
+            }
+          },
+          "409": {
+            "description": "Patient already exists (matched by email). Returns the existing patient.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Patient" } }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ValidationError" } }
+            }
+          }
+        }
+      }
+    },
+    "/patients/{patientId}": {
+      "get": {
+        "tags": ["Patients"],
+        "operationId": "getPatient",
+        "summary": "Get patient profile by ID",
+        "parameters": [
+          {
+            "name": "patientId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" },
+            "example": "a1b2c3d4-0000-0000-0000-000000000001"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Patient profile",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Patient" } }
+            }
+          },
+          "404": {
+            "description": "Patient not found",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/NotFoundError" } }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CreatePatientRequest": {
+        "type": "object",
+        "required": ["first_name", "last_name", "date_of_birth", "email", "phone"],
+        "properties": {
+          "first_name":    { "type": "string" },
+          "last_name":     { "type": "string" },
+          "date_of_birth": { "type": "string", "format": "date" },
+          "email":         { "type": "string", "format": "email" },
+          "phone":         { "type": "string" },
+          "gender":        { "type": "string", "enum": ["male","female","non_binary","prefer_not_to_say"] },
+          "address":       { "$ref": "#/components/schemas/Address" },
+          "insurance":     { "$ref": "#/components/schemas/InsuranceInfo" }
+        }
+      },
+      "Patient": {
+        "type": "object",
+        "properties": {
+          "patient_id":    { "type": "string", "format": "uuid" },
+          "first_name":    { "type": "string" },
+          "last_name":     { "type": "string" },
+          "date_of_birth": { "type": "string", "format": "date" },
+          "email":         { "type": "string", "format": "email" },
+          "phone":         { "type": "string" },
+          "gender":        { "type": "string" },
+          "address":       { "$ref": "#/components/schemas/Address" },
+          "insurance":     { "$ref": "#/components/schemas/InsuranceInfo" },
+          "created_at":    { "type": "string", "format": "date-time" }
+        }
+      },
+      "Address": {
+        "type": "object",
+        "properties": {
+          "street":   { "type": "string" },
+          "city":     { "type": "string" },
+          "state":    { "type": "string" },
+          "postcode": { "type": "string" },
+          "country":  { "type": "string" }
+        }
+      },
+      "InsuranceInfo": {
+        "type": "object",
+        "properties": {
+          "fund_name":    { "type": "string" },
+          "member_id":    { "type": "string" },
+          "policy_level": { "type": "string", "enum": ["basic","bronze","silver","gold","platinum"] }
+        }
+      },
+      "NotFoundError": {
+        "type": "object",
+        "properties": {
+          "error":   { "type": "string", "example": "not_found" },
+          "message": { "type": "string" }
+        }
+      },
+      "ValidationError": {
+        "type": "object",
+        "properties": {
+          "error":   { "type": "string", "example": "validation_error" },
+          "message": { "type": "string" },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field":   { "type": "string" },
+                "message": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

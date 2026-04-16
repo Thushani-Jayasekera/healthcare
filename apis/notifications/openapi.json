@@ -1,0 +1,97 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Notification API",
+    "version": "1.0.0",
+    "description": "Sends booking confirmation messages via email and/or SMS. Requests are accepted asynchronously (202) and delivered via an internal queue."
+  },
+  "servers": [
+    { "url": "http://localhost:8007", "description": "Local" },
+    { "url": "https://notifications.healthcare.example.com/v1", "description": "Production" }
+  ],
+  "tags": [{ "name": "Notifications" }],
+  "paths": {
+    "/notifications/confirmation": {
+      "post": {
+        "tags": ["Notifications"],
+        "operationId": "sendBookingConfirmation",
+        "summary": "Send booking confirmation via email and/or SMS",
+        "description": "Queues a confirmation message. Accepts override contact details if the patient wants delivery to a different address/number than their registered profile.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SendConfirmationRequest" },
+              "example": {
+                "booking_id": "b4000000-0000-0000-0000-000000000004",
+                "channels": ["email","sms"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Confirmation queued for delivery",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/NotificationReceipt" } }
+            }
+          },
+          "422": {
+            "description": "Missing or invalid contact details",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ValidationError" } }
+            }
+          },
+          "404": {
+            "description": "Booking not found",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/NotFoundError" } }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "SendConfirmationRequest": {
+        "type": "object",
+        "required": ["booking_id","channels"],
+        "properties": {
+          "booking_id":      { "type": "string", "format": "uuid" },
+          "channels": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["email","sms"] },
+            "minItems": 1
+          },
+          "override_email":  { "type": "string", "format": "email" },
+          "override_phone":  { "type": "string" }
+        }
+      },
+      "NotificationReceipt": {
+        "type": "object",
+        "properties": {
+          "notification_id": { "type": "string", "format": "uuid" },
+          "booking_id":      { "type": "string", "format": "uuid" },
+          "channels_sent":   { "type": "array", "items": { "type": "string" } },
+          "status":          { "type": "string", "enum": ["queued","delivered","failed"] },
+          "queued_at":       { "type": "string", "format": "date-time" }
+        }
+      },
+      "ValidationError": {
+        "type": "object",
+        "properties": {
+          "error":   { "type": "string" },
+          "message": { "type": "string" }
+        }
+      },
+      "NotFoundError": {
+        "type": "object",
+        "properties": {
+          "error":   { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  }
+}

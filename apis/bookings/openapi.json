@@ -1,0 +1,253 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Booking API",
+    "version": "1.0.0",
+    "description": "Manages the full appointment lifecycle: creation, retrieval, cancellation, and rescheduling."
+  },
+  "servers": [
+    { "url": "http://localhost:8005", "description": "Local" },
+    { "url": "https://bookings.healthcare.example.com/v1", "description": "Production" }
+  ],
+  "tags": [{ "name": "Bookings" }],
+  "paths": {
+    "/bookings": {
+      "post": {
+        "tags": ["Bookings"],
+        "operationId": "createBooking",
+        "summary": "Create a new appointment booking",
+        "description": "Atomically locks the requested slot. Returns 409 if the slot was concurrently taken.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateBookingRequest" },
+              "example": {
+                "patient_id":   "a1b2c3d4-0000-0000-0000-000000000001",
+                "provider_id":  "p2000000-0000-0000-0000-000000000002",
+                "treatment_id": "t1000000-0000-0000-0000-000000000001",
+                "slot_id":      "s3000000-0000-0000-0000-000000000003",
+                "notes":        "Patient has latex allergy."
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Booking confirmed",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Booking" } }
+            }
+          },
+          "409": {
+            "description": "Slot no longer available",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ConflictError" } }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ValidationError" } }
+            }
+          }
+        }
+      }
+    },
+    "/bookings/{bookingId}": {
+      "get": {
+        "tags": ["Bookings"],
+        "operationId": "getBooking",
+        "summary": "Get booking details",
+        "parameters": [
+          {
+            "name": "bookingId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Booking details",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Booking" } }
+            }
+          },
+          "404": {
+            "description": "Booking not found",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/NotFoundError" } }
+            }
+          }
+        }
+      }
+    },
+    "/bookings/{bookingId}/cancel": {
+      "post": {
+        "tags": ["Bookings"],
+        "operationId": "cancelBooking",
+        "summary": "Cancel an existing booking",
+        "parameters": [
+          {
+            "name": "bookingId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CancelBookingRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Booking cancelled",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Booking" } }
+            }
+          },
+          "404": {
+            "description": "Booking not found",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/NotFoundError" } }
+            }
+          },
+          "422": {
+            "description": "Cannot cancel — booking already completed or cancelled, or within 24hr window",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ValidationError" } }
+            }
+          }
+        }
+      }
+    },
+    "/bookings/{bookingId}/reschedule": {
+      "post": {
+        "tags": ["Bookings"],
+        "operationId": "rescheduleBooking",
+        "summary": "Move an existing booking to a new slot",
+        "parameters": [
+          {
+            "name": "bookingId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RescheduleBookingRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Booking rescheduled",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Booking" } }
+            }
+          },
+          "409": {
+            "description": "New slot no longer available",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ConflictError" } }
+            }
+          },
+          "404": {
+            "description": "Booking not found",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/NotFoundError" } }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CreateBookingRequest": {
+        "type": "object",
+        "required": ["patient_id","provider_id","treatment_id","slot_id"],
+        "properties": {
+          "patient_id":   { "type": "string", "format": "uuid" },
+          "provider_id":  { "type": "string", "format": "uuid" },
+          "treatment_id": { "type": "string", "format": "uuid" },
+          "slot_id":      { "type": "string", "format": "uuid" },
+          "notes":        { "type": "string" },
+          "referral_id":  { "type": "string" }
+        }
+      },
+      "Booking": {
+        "type": "object",
+        "properties": {
+          "booking_id":         { "type": "string", "format": "uuid" },
+          "patient_id":         { "type": "string", "format": "uuid" },
+          "provider_id":        { "type": "string", "format": "uuid" },
+          "treatment_id":       { "type": "string", "format": "uuid" },
+          "slot_id":            { "type": "string", "format": "uuid" },
+          "start_time":         { "type": "string", "format": "date-time" },
+          "end_time":           { "type": "string", "format": "date-time" },
+          "status":             { "type": "string", "enum": ["confirmed","pending","cancelled","completed","rescheduled"] },
+          "notes":              { "type": "string" },
+          "referral_id":        { "type": "string" },
+          "confirmation_code":  { "type": "string", "example": "HC-2026-88421" },
+          "created_at":         { "type": "string", "format": "date-time" },
+          "updated_at":         { "type": "string", "format": "date-time" }
+        }
+      },
+      "CancelBookingRequest": {
+        "type": "object",
+        "required": ["reason"],
+        "properties": {
+          "reason": { "type": "string" }
+        }
+      },
+      "RescheduleBookingRequest": {
+        "type": "object",
+        "required": ["new_slot_id"],
+        "properties": {
+          "new_slot_id": { "type": "string", "format": "uuid" },
+          "reason":      { "type": "string" }
+        }
+      },
+      "ConflictError": {
+        "type": "object",
+        "properties": {
+          "error":   { "type": "string", "example": "conflict" },
+          "message": { "type": "string" }
+        }
+      },
+      "NotFoundError": {
+        "type": "object",
+        "properties": {
+          "error":   { "type": "string" },
+          "message": { "type": "string" }
+        }
+      },
+      "ValidationError": {
+        "type": "object",
+        "properties": {
+          "error":   { "type": "string" },
+          "message": { "type": "string" },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field":   { "type": "string" },
+                "message": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
