@@ -1,0 +1,609 @@
+Prompt: /devportal You are an API orchestration agent executing the "Specialist Treatment Booking Workflow" workflow.
+
+  ## Objective
+  Automates the end-to-end journey of booking a specialist medical appointment — from diagnosing the right treatment for a clinical condition, to
+  finding an available provider near the patient, confirming a slot, estimating out-of-pocket costs, and delivering a booking confirmation via email or
+  SMS.
+
+  ## Execution Mode
+  - Execute deterministically, following the workflow steps exactly as defined
+  - Do not fabricate data or skip steps
+  - Do not make creative interpretations — follow the workflow literally
+
+  ## Workflow Source
+  Read the workflow definition for:
+  - Complete execution steps and their sequence
+  - Associated APIs and their OpenAPI specifications
+  - Security schemes for each API
+  - Any additional instructions or constraints
+
+  ## Execution State
+  Maintain state throughout execution:
+  - Track the current step
+  - Record completed steps
+  - Store data outputs from each step
+  - Track any errors encountered
+  - Return the final state and results
+
+  ## Step Execution Protocol
+  For each step in the workflow:
+  1. Identify required inputs (from previous steps, user input, or defaults)
+  2. Read the OpenAPI specification for the API endpoint
+  3. Identify required security scheme(s) from the spec
+  4. Collect any missing credentials from the user
+  5. Execute the API call with proper authentication
+  6. Validate response (expect 2xx status)
+  7. Extract outputs and pass to next step
+  8. On error: log step ID, status code, and response body
+
+  ## Retry Policy
+  - On network errors or 5xx responses: retry up to 3 times with backoff (0s, 1s, 2s)
+  - On 4xx responses: stop execution immediately (non-retryable)
+  - Never expose raw credentials or tokens in output
+
+  ## Constraints
+  - Only call APIs explicitly listed in the workflow
+  - Follow all instructions defined in the workflow 
+
+------
+I need to find the developer portal URL to locate the workflow definition. Let me check the skill configuration first.
+
+  Read 1 file, listed 1 directory (ctrl+o to expand)
+
+⏺ No developer portal URL was provided. To execute the "Specialist Treatment Booking Workflow", I need the URL of the developer portal (e.g.,
+  https://example.com/org/views/default) where the workflow definition and associated API specs are hosted.
+
+  Could you provide the developer portal URL?
+
+❯ https://ec2-54-90-93-36.compute-1.amazonaws.com:3000/aiorg/views/default/                                                                              
+
+⏺ Fetch(https://ec2-54-90-93-36.compute-1.amazonaws.com:3000/aiorg/views/default/llms.txt)
+  ⎿  Error: self signed certificate
+
+⏺ The portal uses a self-signed certificate. Let me try via curl with certificate verification disabled.
+
+⏺ Bash(curl -sk "https://ec2-54-90-93-36.compute-1.amazonaws.com:3000/aiorg/views/default/llms.txt")
+  ⎿  # aiorg Developer Portal
+
+     Empower your development with our APIs & MCP Servers. Browse, subscribe, and integrate in minutes.
+     … +25 lines (ctrl+o to expand)
+
+⏺ Found the portal. Now fetching the workflow definition.
+
+⏺ Bash(curl -sk "https://ec2-54-90-93-36.compute-1.amazonaws.com:3000/aiorg/views/default/api-workflows/specialist-treatment-booking-workflow.md")
+  ⎿  # Specialist Treatment Booking Workflow
+
+     **Status:** PUBLISHED
+     … +160 lines (ctrl+o to expand)
+
+⏺ Workflow definition loaded. Now fetching all 7 API specs in parallel to identify base URLs and security schemes.
+
+⏺ Bash(curl -sk "https://ec2-54-90-93-36.compute-1.amazonaws.com:3000/aiorg/views/default/api/treatment-api-v1.0.md")
+  ⎿  # Treatment API v1.0
+
+     > Provides treatment discovery by condition or specialty, and detailed clinical information per treatment
+     … +58 lines (ctrl+o to expand)
+
+⏺ Bash(curl -sk "https://ec2-54-90-93-36.compute-1.amazonaws.com:3000/aiorg/views/default/api/provider-api-v1.0.md")
+  ⎿  # Provider API v1.0
+
+     > Discovers and retrieves doctors, clinics, and hospitals by specialty and location.
+     … +65 lines (ctrl+o to expand)
+
+⏺ Bash(curl -sk "https://ec2-54-90-93-36.compute-1.amazonaws.com:3000/aiorg/views/default/api/availability-api-v1.0.md")
+  ⎿  # Availability API v1.0
+
+     > Returns available appointment time slots for a given provider, optionally filtered by treatment duration requirements.
+     … +55 lines (ctrl+o to expand)
+
+⏺ Bash(curl -sk "https://ec2-54-90-93-36.compute-1.amazonaws.com:3000/aiorg/views/default/api/pricing-api-v1.0.md")
+  ⎿  # Pricing API v1.0
+
+     > Returns real-time cost estimates for a treatment at a specific provider, including Medicare rebate and private health insurance benefit calcu
+     … +54 lines (ctrl+o to expand)
+
+⏺ Bash(curl -sk "https://ec2-54-90-93-36.compute-1.amazonaws.com:3000/aiorg/views/default/api/patients-api-v1.0.md")
+  ⎿  # Patients API v1.0
+
+     > Manages patient records including creation, profile retrieval, and insurance information.
+     … +64 lines (ctrl+o to expand)
+
+⏺ Bash(curl -sk "https://ec2-54-90-93-36.compute-1.amazonaws.com:3000/aiorg/views/default/api/bookings-api-v1.0.md")
+  ⎿  # Bookings API v1.0
+
+     > Manages the full appointment lifecycle: creation, retrieval, cancellation, and rescheduling
+     … +90 lines (ctrl+o to expand)
+
+⏺ Bash(curl -sk "https://ec2-54-90-93-36.compute-1.amazonaws.com:3000/aiorg/views/default/api/notification-api-v1.0.md")
+  ⎿  # Notification API v1.0
+
+     > Sends booking confirmation messages via email and/or SMS. Requests are accepted asynchronously (202) and delivered via an internal queue
+     … +53 lines (ctrl+o to expand)
+
+⏺ All 7 API specs loaded. Here's what I've found:
+
+  Base URL for all APIs: https://580e193b-74e0-48c7-a888-2206162ffa88-prod.e1-us-east-azure.preview-dv.bijiraapis.dev/default/{api}/v1.0
+
+  Security analysis (x-wso2-disable-security):
+
+  ┌──────────────────┬───────────────┐
+  │       API        │ Auth Required │
+  ├──────────────────┼───────────────┤
+  │ Treatment API    │ No (disabled) │
+  ├──────────────────┼───────────────┤
+  │ Availability API │ No (disabled) │
+  ├──────────────────┼───────────────┤
+  │ Bookings API     │ No (disabled) │
+  ├──────────────────┼───────────────┤
+  │ Provider API     │ Yes           │
+  ├──────────────────┼───────────────┤
+  │ Pricing API      │ Yes           │
+  ├──────────────────┼───────────────┤
+  │ Patients API     │ Yes           │
+  ├──────────────────┼───────────────┤
+  │ Notification API │ Yes           │
+  └──────────────────┴───────────────┘
+
+  The 4 APIs that require auth accept either OAuth2 Bearer token or an API Key (x-api-key header).
+
+  ---
+  Before I can execute the workflow, I need two things from you:
+
+  1. Workflow Inputs
+
+  Please provide the following patient and booking details:
+
+  ┌──────────────────────────────┬────────────────────────────────────────┐
+  │            Field             │                Example                 │
+  ├──────────────────────────────┼────────────────────────────────────────┤
+  │ patient.first_name           │ Jane                                   │
+  ├──────────────────────────────┼────────────────────────────────────────┤
+  │ patient.last_name            │ Smith                                  │
+  ├──────────────────────────────┼────────────────────────────────────────┤
+  │ patient.date_of_birth        │ 1985-03-22                             │
+  ├──────────────────────────────┼────────────────────────────────────────┤
+  │ patient.email                │ jane@example.com                       │
+  ├──────────────────────────────┼────────────────────────────────────────┤
+  │ patient.phone                │ +61412345678                           │
+  ├──────────────────────────────┼────────────────────────────────────────┤
+  │ patient.address (optional)   │ street, city, state, postcode, country │
+  ├──────────────────────────────┼────────────────────────────────────────┤
+  │ patient.insurance (optional) │ fund_name, member_id, policy_level     │
+  ├──────────────────────────────┼────────────────────────────────────────┤
+  │ condition                    │ e.g. "chronic lower back pain"         │
+  ├──────────────────────────────┼────────────────────────────────────────┤
+  │ preferred_location           │ e.g. "Sydney"                          │
+  ├──────────────────────────────┼────────────────────────────────────────┤
+  │ preferred_date_from          │ e.g. 2026-05-01                        │
+  ├──────────────────────────────┼────────────────────────────────────────┤
+  │ preferred_date_to            │ e.g. 2026-05-31                        │
+  ├──────────────────────────────┼────────────────────────────────────────┤
+  │ notification_channels        │ email, sms (default: both)             │
+  └──────────────────────────────┴────────────────────────────────────────┘
+
+  2. API Credentials
+
+  Please provide either an API Key or OAuth2 client credentials (client_id + client_secret + token endpoint) for the portal application subscribed to
+  these APIs.
+
+✻ Worked for 54s
+
+❯ Jane, Smith, 1998-04-17, jane@example.com, +61412345678, 26, Greenwood drive, Sydney, Australia, Medibank, MBK-9876543, silver, back pain, sydney.     
+  2026-04-01 to 2026-05-31 , email                                                                                                                       
+
+⏺ Got all the patient details. I still need API credentials for the 4 APIs that require authentication (Provider, Pricing, Patients, Notification APIs).
+
+  Please provide either:
+
+  Option A — API Key:
+
+  ▎ Your x-api-key value from the developer portal application
+
+  Option B — OAuth2 Client Credentials:
+
+  ▎ client_id, client_secret, and the token endpoint URL
+
+  You can find these in the developer portal under your application's subscription/keys section.
+
+❯ this is the token url : export CLIENT_ID="BVFk8GSfvR7JVElOEDnGitkf_BEa"                                                                                
+  export CLIENT_SECRET="Dg4BnZagy4uW9IObcGlZnE7tkzbuERu5fXUXZOzucaMa"                                                                                    
+                                                                                                                                                         
+  curl -k -X POST https://dev.api.asgardeo.io/t/thushani/oauth2/token -d "grant_type=client_credentials" -H "Authorization: Basic $(echo -n              
+  "$CLIENT_ID:$CLIENT_SECRET" | base64)"                                                                                                                 
+
+⏺ Obtaining the OAuth2 access token first.
+
+⏺ Bash(CLIENT_ID="BVFk8GSfvR7JVElOEDnGitkf_BEa"
+      CLIENT_SECRET="Dg4BnZagy4uW9IObcGlZnE7tkzbuERu5fXUXZOzucaMa"…)
+  ⎿  {
+       "access_token": "eyJ4NXQiOiI2eHBmNGtRRXhXRFFLdlNiM1NNUV94MkY5MnciLCJraWQiOiJaREJpWXpNNVkyVXhOMlE1WlRBNE1EWmlOalV6TnpaaU56TTNOMkZsTW1Nd05tTXlZ
+     alF6TVRnMVpUVmlZVE5oTldNMVkyUTJNV0ZpTWpVd1pXUm1NZ19SUzI1NiIsInR5cCI6ImF0K2p3dCIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiJCVkZrOEdTZnZSN0pWRWxPRURuR2l0a2Z
+     … +10 lines (ctrl+o to expand)
+
+⏺ Token obtained. Now executing the workflow. Starting Step 1: identifyTreatment.
+
+⏺ Bash(TOKEN="eyJ4NXQiOiI2eHBmNGtRRXhXRFFLdlNiM1NNUV94MkY5MnciLCJraWQiOiJaREJpWXpNNVkyVXhOMlE1WlRBNE1EWmlOalV6TnpaaU56TTNOMkZsTW1Nd05tTXlZalF6TVRnMVpUVml
+      ZVE5oTldNMVkyU…)
+  ⎿  {
+       "total": 1,
+       "page": 1,
+     … +26 lines (ctrl+o to expand)
+
+⏺ Step 1 ✓ — Treatment identified: Lumbar Spinal Decompression (Orthopedics, 90 min). Now Step 2: findProviders.
+
+⏺ Bash(TOKEN="eyJ4NXQiOiI2eHBmNGtRRXhXRFFLdlNiM1NNUV94MkY5MnciLCJraWQiOiJaREJpWXpNNVkyVXhOMlE1WlRBNE1EWmlOalV6TnpaaU56TTNOMkZsTW1Nd05tTXlZalF6TVRnMVpUVml
+      ZVE5oTldNMVkyU…)
+  ⎿  {
+       "total": 3,
+       "page": 1,
+     … +69 lines (ctrl+o to expand)
+
+⏺ Step 2 ✓ — Top provider: Dr. Marcus Chen (rating 4.8, 2.1km, accepts Medibank). Now Step 3: checkAvailability.
+
+⏺ Bash(TOKEN="eyJ4NXQiOiI2eHBmNGtRRXhXRFFLdlNiM1NNUV94MkY5MnciLCJraWQiOiJaREJpWXpNNVkyVXhOMlE1WlRBNE1EWmlOalV6TnpaaU56TTNOMkZsTW1Nd05tTXlZalF6TVRnMVpUVml
+      ZVE5oTldNMVkyU…)
+  ⎿  {"provider_id":"p2000000-0001-0001-0001-000000000001","date_from":"2026-04-01","date_to":"2026-05-31","slots":[{"slot_id":"s0000001-0000-0000-0
+     000-000000000001","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-01T09:00:00+10:00","end_time":"2026-05-01T10:00:00
+     +10:00","status":"available"},{"slot_id":"s0000002-0000-0000-0000-000000000002","provider_id":"p2000000-0001-0001-0001-000000000001","start_tim
+     … +179 lines (ctrl+o to expand)
+
+⏺ Step 3 ✓ — 126 slots available; first slot: 1 May 2026 09:00–10:00 AEST. Now running Steps 4 (getPricing) and 5 (createOrVerifyPatient) in parallel.
+
+⏺ Bash(TOKEN="eyJ4NXQiOiI2eHBmNGtRRXhXRFFLdlNiM1NNUV94MkY5MnciLCJraWQiOiJaREJpWXpNNVkyVXhOMlE1WlRBNE1EWmlOalV6TnpaaU56TTNOMkZsTW1Nd05tTXlZalF6TVRnMVpUVml
+      ZVE5oTldNMVkyU…)
+  ⎿  {
+       "treatment_id": "t1000000-0001-0001-0001-000000000001",
+       "provider_id": "p2000000-0001-0001-0001-000000000001",
+     … +11 lines (ctrl+o to expand)
+
+⏺ Bash(TOKEN="eyJ4NXQiOiI2eHBmNGtRRXhXRFFLdlNiM1NNUV94MkY5MnciLCJraWQiOiJaREJpWXpNNVkyVXhOMlE1WlRBNE1EWmlOalV6TnpaaU56TTNOMkZsTW1Nd05tTXlZalF6TVRnMVpUVml
+      ZVE5oTldNMVkyU…)
+  ⎿  {
+       "patient_id": "3450ef6b-3c91-4c9b-9828-c5746aec3941",
+       "first_name": "Jane",
+     … +20 lines (ctrl+o to expand)
+
+⏺ Step 4 ✓ — AUD 760 out-of-pocket (gross $1,180 − $420 Medicare rebate). Step 5 ✓ — Patient record created (ID: 3450ef6b). Now Step 6: bookAppointment.
+
+     2026-05-07T09:00:00+10:00","end_time":"2026-05-07T10:00:00+10:00","status":"available"},{"slot_id":"s0000026-0000-0000-0000-000000000026","prov     
+     ider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-07T10:00:00+10:00","end_time":"2026-05-07T11:00:00+10:00","status":"avail
+     able"},{"slot_id":"s0000027-0000-0000-0000-000000000027","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-07T11:00:00
+     +10:00","end_time":"2026-05-07T12:00:00+10:00","status":"available"},{"slot_id":"s0000028-0000-0000-0000-000000000028","provider_id":"p2000000-
+     0001-0001-0001-000000000001","start_time":"2026-05-07T14:00:00+10:00","end_time":"2026-05-07T15:00:00+10:00","status":"available"},{"slot_id":"
+     s0000029-0000-0000-0000-000000000029","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-07T15:00:00+10:00","end_time":
+     "2026-05-07T16:00:00+10:00","status":"available"},{"slot_id":"s0000030-0000-0000-0000-000000000030","provider_id":"p2000000-0001-0001-0001-0000
+     00000001","start_time":"2026-05-07T16:00:00+10:00","end_time":"2026-05-07T17:00:00+10:00","status":"available"},{"slot_id":"s0000031-0000-0000-
+     0000-000000000031","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-08T09:00:00+10:00","end_time":"2026-05-08T10:00:0
+     0+10:00","status":"available"},{"slot_id":"s0000032-0000-0000-0000-000000000032","provider_id":"p2000000-0001-0001-0001-000000000001","start_ti     
+     me":"2026-05-08T10:00:00+10:00","end_time":"2026-05-08T11:00:00+10:00","status":"available"},{"slot_id":"s0000033-0000-0000-0000-000000000033",
+     "provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-08T11:00:00+10:00","end_time":"2026-05-08T12:00:00+10:00","status":"
+     available"},{"slot_id":"s0000034-0000-0000-0000-000000000034","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-08T14:
+     00:00+10:00","end_time":"2026-05-08T15:00:00+10:00","status":"available"},{"slot_id":"s0000035-0000-0000-0000-000000000035","provider_id":"p200
+     0000-0001-0001-0001-000000000001","start_time":"2026-05-08T15:00:00+10:00","end_time":"2026-05-08T16:00:00+10:00","status":"available"},{"slot_
+     id":"s0000036-0000-0000-0000-000000000036","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-08T16:00:00+10:00","end_t
+     ime":"2026-05-08T17:00:00+10:00","status":"available"},{"slot_id":"s0000037-0000-0000-0000-000000000037","provider_id":"p2000000-0001-0001-0001
+     -000000000001","start_time":"2026-05-11T09:00:00+10:00","end_time":"2026-05-11T10:00:00+10:00","status":"available"},{"slot_id":"s0000038-0000-
+     0000-0000-000000000038","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-11T10:00:00+10:00","end_time":"2026-05-11T11
+     :00:00+10:00","status":"available"},{"slot_id":"s0000039-0000-0000-0000-000000000039","provider_id":"p2000000-0001-0001-0001-000000000001","sta
+     rt_time":"2026-05-11T11:00:00+10:00","end_time":"2026-05-11T12:00:00+10:00","status":"available"},{"slot_id":"s0000040-0000-0000-0000-000000000
+     040","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-11T14:00:00+10:00","end_time":"2026-05-11T15:00:00+10:00","stat
+     us":"available"},{"slot_id":"s0000041-0000-0000-0000-000000000041","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-1
+     1T15:00:00+10:00","end_time":"2026-05-11T16:00:00+10:00","status":"available"},{"slot_id":"s0000042-0000-0000-0000-000000000042","provider_id":
+     "p2000000-0001-0001-0001-000000000001","start_time":"2026-05-11T16:00:00+10:00","end_time":"2026-05-11T17:00:00+10:00","status":"available"},{"
+     slot_id":"s0000043-0000-0000-0000-000000000043","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-12T09:00:00+10:00","
+     end_time":"2026-05-12T10:00:00+10:00","status":"available"},{"slot_id":"s0000044-0000-0000-0000-000000000044","provider_id":"p2000000-0001-0001
+     -0001-000000000001","start_time":"2026-05-12T10:00:00+10:00","end_time":"2026-05-12T11:00:00+10:00","status":"available"},{"slot_id":"s0000045-
+     0000-0000-0000-000000000045","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-12T11:00:00+10:00","end_time":"2026-05-
+     12T12:00:00+10:00","status":"available"},{"slot_id":"s0000046-0000-0000-0000-000000000046","provider_id":"p2000000-0001-0001-0001-000000000001"
+     ,"start_time":"2026-05-12T14:00:00+10:00","end_time":"2026-05-12T15:00:00+10:00","status":"available"},{"slot_id":"s0000047-0000-0000-0000-0000
+     00000047","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-12T15:00:00+10:00","end_time":"2026-05-12T16:00:00+10:00",
+     "status":"available"},{"slot_id":"s0000048-0000-0000-0000-000000000048","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026
+     -05-12T16:00:00+10:00","end_time":"2026-05-12T17:00:00+10:00","status":"available"},{"slot_id":"s0000049-0000-0000-0000-000000000049","provider
+     _id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-13T09:00:00+10:00","end_time":"2026-05-13T10:00:00+10:00","status":"available
+     "},{"slot_id":"s0000050-0000-0000-0000-000000000050","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-13T10:00:00+10:
+     00","end_time":"2026-05-13T11:00:00+10:00","status":"available"},{"slot_id":"s0000051-0000-0000-0000-000000000051","provider_id":"p2000000-0001
+     -0001-0001-000000000001","start_time":"2026-05-13T11:00:00+10:00","end_time":"2026-05-13T12:00:00+10:00","status":"available"},{"slot_id":"s000
+     0052-0000-0000-0000-000000000052","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-13T14:00:00+10:00","end_time":"202
+     6-05-13T15:00:00+10:00","status":"available"},{"slot_id":"s0000053-0000-0000-0000-000000000053","provider_id":"p2000000-0001-0001-0001-00000000
+     0001","start_time":"2026-05-13T15:00:00+10:00","end_time":"2026-05-13T16:00:00+10:00","status":"available"},{"slot_id":"s0000054-0000-0000-0000
+     -000000000054","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-13T16:00:00+10:00","end_time":"2026-05-13T17:00:00+10
+     :00","status":"available"},{"slot_id":"s0000055-0000-0000-0000-000000000055","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":
+     "2026-05-14T09:00:00+10:00","end_time":"2026-05-14T10:00:00+10:00","status":"available"},{"slot_id":"s0000056-0000-0000-0000-000000000056","pro
+     vider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-14T10:00:00+10:00","end_time":"2026-05-14T11:00:00+10:00","status":"avai
+     lable"},{"slot_id":"s0000057-0000-0000-0000-000000000057","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-14T11:00:0
+     0+10:00","end_time":"2026-05-14T12:00:00+10:00","status":"available"},{"slot_id":"s0000058-0000-0000-0000-000000000058","provider_id":"p2000000
+     -0001-0001-0001-000000000001","start_time":"2026-05-14T14:00:00+10:00","end_time":"2026-05-14T15:00:00+10:00","status":"available"},{"slot_id":     
+     "s0000059-0000-0000-0000-000000000059","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-14T15:00:00+10:00","end_time"
+     :"2026-05-14T16:00:00+10:00","status":"available"},{"slot_id":"s0000060-0000-0000-0000-000000000060","provider_id":"p2000000-0001-0001-0001-000     
+     000000001","start_time":"2026-05-14T16:00:00+10:00","end_time":"2026-05-14T17:00:00+10:00","status":"available"},{"slot_id":"s0000061-0000-0000   
+     -0000-000000000061","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-15T09:00:00+10:00","end_time":"2026-05-15T10:00:
+     00+10:00","status":"available"},{"slot_id":"s0000062-0000-0000-0000-000000000062","provider_id":"p2000000-0001-0001-0001-000000000001","start_t
+     ime":"2026-05-15T10:00:00+10:00","end_time":"2026-05-15T11:00:00+10:00","status":"available"},{"slot_id":"s0000063-0000-0000-0000-000000000063"
+     ,"provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-15T11:00:00+10:00","end_time":"2026-05-15T12:00:00+10:00","status":
+     "available"},{"slot_id":"s0000064-0000-0000-0000-000000000064","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-15T14
+     :00:00+10:00","end_time":"2026-05-15T15:00:00+10:00","status":"available"},{"slot_id":"s0000065-0000-0000-0000-000000000065","provider_id":"p20
+     00000-0001-0001-0001-000000000001","start_time":"2026-05-15T15:00:00+10:00","end_time":"2026-05-15T16:00:00+10:00","status":"available"},{"slot
+     _id":"s0000066-0000-0000-0000-000000000066","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-15T16:00:00+10:00","end_
+     time":"2026-05-15T17:00:00+10:00","status":"available"},{"slot_id":"s0000067-0000-0000-0000-000000000067","provider_id":"p2000000-0001-0001-000
+     1-000000000001","start_time":"2026-05-18T09:00:00+10:00","end_time":"2026-05-18T10:00:00+10:00","status":"available"},{"slot_id":"s0000068-0000
+     -0000-0000-000000000068","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-18T10:00:00+10:00","end_time":"2026-05-18T1
+     1:00:00+10:00","status":"available"},{"slot_id":"s0000069-0000-0000-0000-000000000069","provider_id":"p2000000-0001-0001-0001-000000000001","st
+     art_time":"2026-05-18T11:00:00+10:00","end_time":"2026-05-18T12:00:00+10:00","status":"available"},{"slot_id":"s0000070-0000-0000-0000-00000000
+     0070","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-18T14:00:00+10:00","end_time":"2026-05-18T15:00:00+10:00","sta
+     tus":"available"},{"slot_id":"s0000071-0000-0000-0000-000000000071","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-
+     18T15:00:00+10:00","end_time":"2026-05-18T16:00:00+10:00","status":"available"},{"slot_id":"s0000072-0000-0000-0000-000000000072","provider_id"
+     :"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-18T16:00:00+10:00","end_time":"2026-05-18T17:00:00+10:00","status":"available"},{
+     "slot_id":"s0000073-0000-0000-0000-000000000073","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-19T09:00:00+10:00",
+     "end_time":"2026-05-19T10:00:00+10:00","status":"available"},{"slot_id":"s0000074-0000-0000-0000-000000000074","provider_id":"p2000000-0001-000
+     1-0001-000000000001","start_time":"2026-05-19T10:00:00+10:00","end_time":"2026-05-19T11:00:00+10:00","status":"available"},{"slot_id":"s0000075
+     -0000-0000-0000-000000000075","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-19T11:00:00+10:00","end_time":"2026-05
+     -19T12:00:00+10:00","status":"available"},{"slot_id":"s0000076-0000-0000-0000-000000000076","provider_id":"p2000000-0001-0001-0001-000000000001
+     ","start_time":"2026-05-19T14:00:00+10:00","end_time":"2026-05-19T15:00:00+10:00","status":"available"},{"slot_id":"s0000077-0000-0000-0000-000
+     000000077","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-19T15:00:00+10:00","end_time":"2026-05-19T16:00:00+10:00"
+     ,"status":"available"},{"slot_id":"s0000078-0000-0000-0000-000000000078","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"202
+     6-05-19T16:00:00+10:00","end_time":"2026-05-19T17:00:00+10:00","status":"available"},{"slot_id":"s0000079-0000-0000-0000-000000000079","provide
+     r_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-20T09:00:00+10:00","end_time":"2026-05-20T10:00:00+10:00","status":"availabl
+     e"},{"slot_id":"s0000080-0000-0000-0000-000000000080","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-20T10:00:00+10
+     :00","end_time":"2026-05-20T11:00:00+10:00","status":"available"},{"slot_id":"s0000081-0000-0000-0000-000000000081","provider_id":"p2000000-000
+     1-0001-0001-000000000001","start_time":"2026-05-20T11:00:00+10:00","end_time":"2026-05-20T12:00:00+10:00","status":"available"},{"slot_id":"s00
+     00082-0000-0000-0000-000000000082","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-20T14:00:00+10:00","end_time":"20
+     26-05-20T15:00:00+10:00","status":"available"},{"slot_id":"s0000083-0000-0000-0000-000000000083","provider_id":"p2000000-0001-0001-0001-0000000
+     00001","start_time":"2026-05-20T15:00:00+10:00","end_time":"2026-05-20T16:00:00+10:00","status":"available"},{"slot_id":"s0000084-0000-0000-000
+     0-000000000084","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-20T16:00:00+10:00","end_time":"2026-05-20T17:00:00+1
+     0:00","status":"available"},{"slot_id":"s0000085-0000-0000-0000-000000000085","provider_id":"p2000000-0001-0001-0001-000000000001","start_time"
+     :"2026-05-21T09:00:00+10:00","end_time":"2026-05-21T10:00:00+10:00","status":"available"},{"slot_id":"s0000086-0000-0000-0000-000000000086","pr
+     ovider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-21T10:00:00+10:00","end_time":"2026-05-21T11:00:00+10:00","status":"ava
+     ilable"},{"slot_id":"s0000087-0000-0000-0000-000000000087","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-21T11:00:
+     00+10:00","end_time":"2026-05-21T12:00:00+10:00","status":"available"},{"slot_id":"s0000088-0000-0000-0000-000000000088","provider_id":"p200000
+     0-0001-0001-0001-000000000001","start_time":"2026-05-21T14:00:00+10:00","end_time":"2026-05-21T15:00:00+10:00","status":"available"},{"slot_id"
+     :"s0000089-0000-0000-0000-000000000089","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-21T15:00:00+10:00","end_time
+     ":"2026-05-21T16:00:00+10:00","status":"available"},{"slot_id":"s0000090-0000-0000-0000-000000000090","provider_id":"p2000000-0001-0001-0001-00
+     0000000001","start_time":"2026-05-21T16:00:00+10:00","end_time":"2026-05-21T17:00:00+10:00","status":"available"},{"slot_id":"s0000091-0000-000
+     0-0000-000000000091","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-22T09:00:00+10:00","end_time":"2026-05-22T10:00
+     :00+10:00","status":"available"},{"slot_id":"s0000092-0000-0000-0000-000000000092","provider_id":"p2000000-0001-0001-0001-000000000001","start_
+     time":"2026-05-22T10:00:00+10:00","end_time":"2026-05-22T11:00:00+10:00","status":"available"},{"slot_id":"s0000093-0000-0000-0000-000000000093
+     ","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-22T11:00:00+10:00","end_time":"2026-05-22T12:00:00+10:00","status"
+     :"available"},{"slot_id":"s0000094-0000-0000-0000-000000000094","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-22T1
+     4:00:00+10:00","end_time":"2026-05-22T15:00:00+10:00","status":"available"},{"slot_id":"s0000095-0000-0000-0000-000000000095","provider_id":"p2
+     000000-0001-0001-0001-000000000001","start_time":"2026-05-22T15:00:00+10:00","end_time":"2026-05-22T16:00:00+10:00","status":"available"},{"slo
+     t_id":"s0000096-0000-0000-0000-000000000096","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-22T16:00:00+10:00","end
+     _time":"2026-05-22T17:00:00+10:00","status":"available"},{"slot_id":"s0000097-0000-0000-0000-000000000097","provider_id":"p2000000-0001-0001-00
+     01-000000000001","start_time":"2026-05-25T09:00:00+10:00","end_time":"2026-05-25T10:00:00+10:00","status":"available"},{"slot_id":"s0000098-000
+     0-0000-0000-000000000098","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-25T10:00:00+10:00","end_time":"2026-05-25T
+     11:00:00+10:00","status":"available"},{"slot_id":"s0000099-0000-0000-0000-000000000099","provider_id":"p2000000-0001-0001-0001-000000000001","s
+     tart_time":"2026-05-25T11:00:00+10:00","end_time":"2026-05-25T12:00:00+10:00","status":"available"},{"slot_id":"s0000100-0000-0000-0000-0000000
+     00100","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-25T14:00:00+10:00","end_time":"2026-05-25T15:00:00+10:00","st
+     atus":"available"},{"slot_id":"s0000101-0000-0000-0000-000000000101","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05
+     -25T15:00:00+10:00","end_time":"2026-05-25T16:00:00+10:00","status":"available"},{"slot_id":"s0000102-0000-0000-0000-000000000102","provider_id
+     ":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-25T16:00:00+10:00","end_time":"2026-05-25T17:00:00+10:00","status":"available"},
+     {"slot_id":"s0000103-0000-0000-0000-000000000103","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-26T09:00:00+10:00"
+     ,"end_time":"2026-05-26T10:00:00+10:00","status":"available"},{"slot_id":"s0000104-0000-0000-0000-000000000104","provider_id":"p2000000-0001-00
+     01-0001-000000000001","start_time":"2026-05-26T10:00:00+10:00","end_time":"2026-05-26T11:00:00+10:00","status":"available"},{"slot_id":"s000010
+     5-0000-0000-0000-000000000105","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-26T11:00:00+10:00","end_time":"2026-0
+     5-26T12:00:00+10:00","status":"available"},{"slot_id":"s0000106-0000-0000-0000-000000000106","provider_id":"p2000000-0001-0001-0001-00000000000
+     1","start_time":"2026-05-26T14:00:00+10:00","end_time":"2026-05-26T15:00:00+10:00","status":"available"},{"slot_id":"s0000107-0000-0000-0000-00
+     0000000107","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-26T15:00:00+10:00","end_time":"2026-05-26T16:00:00+10:00
+     ","status":"available"},{"slot_id":"s0000108-0000-0000-0000-000000000108","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"20
+     26-05-26T16:00:00+10:00","end_time":"2026-05-26T17:00:00+10:00","status":"available"},{"slot_id":"s0000109-0000-0000-0000-000000000109","provid
+     er_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-27T09:00:00+10:00","end_time":"2026-05-27T10:00:00+10:00","status":"availab
+     le"},{"slot_id":"s0000110-0000-0000-0000-000000000110","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-27T10:00:00+1
+     0:00","end_time":"2026-05-27T11:00:00+10:00","status":"available"},{"slot_id":"s0000111-0000-0000-0000-000000000111","provider_id":"p2000000-00
+     01-0001-0001-000000000001","start_time":"2026-05-27T11:00:00+10:00","end_time":"2026-05-27T12:00:00+10:00","status":"available"},{"slot_id":"s0
+     000112-0000-0000-0000-000000000112","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-27T14:00:00+10:00","end_time":"2
+     026-05-27T15:00:00+10:00","status":"available"},{"slot_id":"s0000113-0000-0000-0000-000000000113","provider_id":"p2000000-0001-0001-0001-000000
+     000001","start_time":"2026-05-27T15:00:00+10:00","end_time":"2026-05-27T16:00:00+10:00","status":"available"},{"slot_id":"s0000114-0000-0000-00
+     00-000000000114","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-27T16:00:00+10:00","end_time":"2026-05-27T17:00:00+
+     10:00","status":"available"},{"slot_id":"s0000115-0000-0000-0000-000000000115","provider_id":"p2000000-0001-0001-0001-000000000001","start_time
+     ":"2026-05-28T09:00:00+10:00","end_time":"2026-05-28T10:00:00+10:00","status":"available"},{"slot_id":"s0000116-0000-0000-0000-000000000116","p
+     rovider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-28T10:00:00+10:00","end_time":"2026-05-28T11:00:00+10:00","status":"av
+     ailable"},{"slot_id":"s0000117-0000-0000-0000-000000000117","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-28T11:00
+     :00+10:00","end_time":"2026-05-28T12:00:00+10:00","status":"available"},{"slot_id":"s0000118-0000-0000-0000-000000000118","provider_id":"p20000
+     00-0001-0001-0001-000000000001","start_time":"2026-05-28T14:00:00+10:00","end_time":"2026-05-28T15:00:00+10:00","status":"available"},{"slot_id
+     ":"s0000119-0000-0000-0000-000000000119","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-28T15:00:00+10:00","end_tim
+     e":"2026-05-28T16:00:00+10:00","status":"available"},{"slot_id":"s0000120-0000-0000-0000-000000000120","provider_id":"p2000000-0001-0001-0001-0
+     00000000001","start_time":"2026-05-28T16:00:00+10:00","end_time":"2026-05-28T17:00:00+10:00","status":"available"},{"slot_id":"s0000121-0000-00
+     00-0000-000000000121","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-29T09:00:00+10:00","end_time":"2026-05-29T10:0
+     0:00+10:00","status":"available"},{"slot_id":"s0000122-0000-0000-0000-000000000122","provider_id":"p2000000-0001-0001-0001-000000000001","start
+     _time":"2026-05-29T10:00:00+10:00","end_time":"2026-05-29T11:00:00+10:00","status":"available"},{"slot_id":"s0000123-0000-0000-0000-00000000012
+     3","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-29T11:00:00+10:00","end_time":"2026-05-29T12:00:00+10:00","status
+     ":"available"},{"slot_id":"s0000124-0000-0000-0000-000000000124","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-29T
+     14:00:00+10:00","end_time":"2026-05-29T15:00:00+10:00","status":"available"},{"slot_id":"s0000125-0000-0000-0000-000000000125","provider_id":"p
+     2000000-0001-0001-0001-000000000001","start_time":"2026-05-29T15:00:00+10:00","end_time":"2026-05-29T16:00:00+10:00","status":"available"},{"sl
+     ot_id":"s0000126-0000-0000-0000-000000000126","provider_id":"p2000000-0001-0001-0001-000000000001","start_time":"2026-05-29T16:00:00+10:00","en
+     d_time":"2026-05-29T17:00:00+10:00","status":"available"}],"next_available_date":null}
+
+     200
+
+                                                                                                                       06:34 PM claude-sonnet-4-6
+⏺ Step 3 ✓ — 126 slots available; first slot: 1 May 2026 09:00–10:00 AEST. Now running Steps 4 (getPricing) and 5 (createOrVerifyPatient) in parallel.
+
+⏺ Bash(TOKEN="eyJ4NXQiOiI2eHBmNGtRRXhXRFFLdlNiM1NNUV94MkY5MnciLCJraWQiOiJaREJpWXpNNVkyVXhOMlE1WlRBNE1EWmlOalV6TnpaaU56TTNOMkZsTW1Nd05tTXlZalF6TVRnMVpUVml
+      ZVE5oTldNMVkyUTJNV0ZpTWpVd1pXUm1NZ19SUzI1NiIsInR5cCI6ImF0K2p3dCIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiJCVkZrOEdTZnZSN0pWRWxPRURuR2l0a2ZfQkVhIiwiYXV0IjoiQV
+      BQTElDQVRJT04iLCJpc3MiOiJodHRwczovL2Rldi5hcGkuYXNnYXJkZW8uaW8vdC90aHVzaGFuaS9vYXV0aDIvdG9rZW4iLCJjbGllbnRfaWQiOiJCVkZrOEdTZnZSN0pWRWxPRURuR2l0a2ZfQ
+      kVhIiwiYXVkIjoiQlZGazhHU2Z2UjdKVkVsT0VEbkdpdGtmX0JFYSIsIm5iZiI6MTc3NjQzMTA3NCwiYXpwIjoiQlZGazhHU2Z2UjdKVkVsT0VEbkdpdGtmX0JFYSIsIm9yZ19pZCI6ImYzNGZj
+      MDExLTM4YTYtNDY2My05ZmExLTlhMjQzMDA2YzUzOCIsImV4cCI6MTc3NjQzNDY3NCwib3JnX25hbWUiOiJ0aHVzaGFuaSIsImlhdCI6MTc3NjQzMTA3NCwianRpIjoiMTU1ZjgwYjYtM2YwMy0
+      0MDE5LWE5MzEtYWM2N2QwN2E3NzczIiwib3JnX2hhbmRsZSI6InRodXNoYW5pIn0.PcuTbY6AzLhOMBFJ4-zTRtw_jwYXT6sRfDHypc4FWJwvV2rEOLXajjxEg9pmsgXHs75GMr09rNueqCBqjT
+      _jjLJUQuHo6YtrVjc4ClpbDNKjK6Io-sviM22pN_ciYhdrZBe7_ikshl3BJ7He49xs-PbbdIGXw4zbc2QgrH61Vmvg17IrZjdKYIY6chXDHfJhOOd2bp964XiYYQ-ZjeKa22negpw4LI0cI4AQW
+      o9Qpz1Ca5vJgWUzH9cGKjM-qVnLK1phExZ2ubiBvIRUsbMil0EX7grXNO_eIRRKeUBtHOQcnr2LxioDMyypH3bZ9DhzlNWb8C4egSxsunUjWj95MQ"
+      BASE="https://580e193b-74e0-48c7-a888-2206162ffa88-prod.e1-us-east-azure.preview-dv.bijiraapis.dev/default"
+
+      # Step 4: getPricing
+      curl -s -w "\n%{http_code}" \
+        "${BASE}/pricing-api/v1.0/pricing/estimate?treatment_id=t1000000-0001-0001-0001-000000000001&provider_id=p2000000-0001-0001-0001-000000000001" \
+        -H "Authorization: Bearer $TOKEN")
+  ⎿  {
+       "treatment_id": "t1000000-0001-0001-0001-000000000001",
+       "provider_id": "p2000000-0001-0001-0001-000000000001",
+       "currency": "AUD",
+       "gross_fee": 1180,
+       "medicare_rebate": 420,
+       "insurance_benefit": 0,
+       "estimated_gap": 760,
+       "out_of_pocket": 760,
+       "disclaimer": "This is an estimate only. Final costs depend on clinical decisions made during the procedure.",
+       "valid_until": "2026-04-18T13:06:29.996333432Z"
+     }
+
+     200
+
+⏺ Bash(TOKEN="eyJ4NXQiOiI2eHBmNGtRRXhXRFFLdlNiM1NNUV94MkY5MnciLCJraWQiOiJaREJpWXpNNVkyVXhOMlE1WlRBNE1EWmlOalV6TnpaaU56TTNOMkZsTW1Nd05tTXlZalF6TVRnMVpUVml
+      ZVE5oTldNMVkyUTJNV0ZpTWpVd1pXUm1NZ19SUzI1NiIsInR5cCI6ImF0K2p3dCIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiJCVkZrOEdTZnZSN0pWRWxPRURuR2l0a2ZfQkVhIiwiYXV0IjoiQV
+      BQTElDQVRJT04iLCJpc3MiOiJodHRwczovL2Rldi5hcGkuYXNnYXJkZW8uaW8vdC90aHVzaGFuaS9vYXV0aDIvdG9rZW4iLCJjbGllbnRfaWQiOiJCVkZrOEdTZnZSN0pWRWxPRURuR2l0a2ZfQ
+      kVhIiwiYXVkIjoiQlZGazhHU2Z2UjdKVkVsT0VEbkdpdGtmX0JFYSIsIm5iZiI6MTc3NjQzMTA3NCwiYXpwIjoiQlZGazhHU2Z2UjdKVkVsT0VEbkdpdGtmX0JFYSIsIm9yZ19pZCI6ImYzNGZj
+      MDExLTM4YTYtNDY2My05ZmExLTlhMjQzMDA2YzUzOCIsImV4cCI6MTc3NjQzNDY3NCwib3JnX25hbWUiOiJ0aHVzaGFuaSIsImlhdCI6MTc3NjQzMTA3NCwianRpIjoiMTU1ZjgwYjYtM2YwMy0
+      0MDE5LWE5MzEtYWM2N2QwN2E3NzczIiwib3JnX2hhbmRsZSI6InRodXNoYW5pIn0.PcuTbY6AzLhOMBFJ4-zTRtw_jwYXT6sRfDHypc4FWJwvV2rEOLXajjxEg9pmsgXHs75GMr09rNueqCBqjT
+      _jjLJUQuHo6YtrVjc4ClpbDNKjK6Io-sviM22pN_ciYhdrZBe7_ikshl3BJ7He49xs-PbbdIGXw4zbc2QgrH61Vmvg17IrZjdKYIY6chXDHfJhOOd2bp964XiYYQ-ZjeKa22negpw4LI0cI4AQW
+      o9Qpz1Ca5vJgWUzH9cGKjM-qVnLK1phExZ2ubiBvIRUsbMil0EX7grXNO_eIRRKeUBtHOQcnr2LxioDMyypH3bZ9DhzlNWb8C4egSxsunUjWj95MQ"
+      BASE="https://580e193b-74e0-48c7-a888-2206162ffa88-prod.e1-us-east-azure.preview-dv.bijiraapis.dev/default"
+
+      # Step 5: createOrVerifyPatient
+      curl -s -w "\n%{http_code}" \
+        -X POST "${BASE}/patients-api/v1.0/patients" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "first_name": "Jane",
+          "last_name": "Smith",
+          "date_of_birth": "1998-04-17",
+          "email": "jane@example.com",
+          "phone": "+61412345678",
+          "address": {
+            "street": "26 Greenwood Drive",
+            "city": "Sydney",
+            "state": "NSW",
+            "postcode": "2000",
+            "country": "AU"
+          },
+          "insurance": {
+            "fund_name": "Medibank",
+            "member_id": "MBK-9876543",
+            "policy_level": "silver"
+          }
+        }')
+  ⎿  {
+       "patient_id": "3450ef6b-3c91-4c9b-9828-c5746aec3941",
+       "first_name": "Jane",
+       "last_name": "Smith",
+       "date_of_birth": "1998-04-17",
+       "email": "jane@example.com",
+       "phone": "+61412345678",
+       "address": {
+         "street": "26 Greenwood Drive",
+         "city": "Sydney",
+         "state": "NSW",
+         "postcode": "2000",
+         "country": "AU"
+       },
+       "insurance": {
+         "fund_name": "Medibank",
+         "member_id": "MBK-9876543",
+         "policy_level": "silver"
+       },
+       "created_at": "2026-04-17T13:06:36.099099965Z"
+     }
+
+     201
+
+                                                                                                                       06:35 PM claude-sonnet-4-6
+⏺ Step 4 ✓ — AUD 760 out-of-pocket (gross $1,180 − $420 Medicare rebate). Step 5 ✓ — Patient record created (ID: 3450ef6b). Now Step 6: bookAppointment.
+
+⏺ Bash(TOKEN="eyJ4NXQiOiI2eHBmNGtRRXhXRFFLdlNiM1NNUV94MkY5MnciLCJraWQiOiJaREJpWXpNNVkyVXhOMlE1WlRBNE1EWmlOalV6TnpaaU56TTNOMkZsTW1Nd05tTXlZalF6TVRnMVpUVml
+      ZVE5oTldNMVkyUTJNV0ZpTWpVd1pXUm1NZ19SUzI1NiIsInR5cCI6ImF0K2p3dCIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiJCVkZrOEdTZnZSN0pWRWxPRURuR2l0a2ZfQkVhIiwiYXV0IjoiQV
+      BQTElDQVRJT04iLCJpc3MiOiJodHRwczovL2Rldi5hcGkuYXNnYXJkZW8uaW8vdC90aHVzaGFuaS9vYXV0aDIvdG9rZW4iLCJjbGllbnRfaWQiOiJCVkZrOEdTZnZSN0pWRWxPRURuR2l0a2ZfQ
+      kVhIiwiYXVkIjoiQlZGazhHU2Z2UjdKVkVsT0VEbkdpdGtmX0JFYSIsIm5iZiI6MTc3NjQzMTA3NCwiYXpwIjoiQlZGazhHU2Z2UjdKVkVsT0VEbkdpdGtmX0JFYSIsIm9yZ19pZCI6ImYzNGZj
+      MDExLTM4YTYtNDY2My05ZmExLTlhMjQzMDA2YzUzOCIsImV4cCI6MTc3NjQzNDY3NCwib3JnX25hbWUiOiJ0aHVzaGFuaSIsImlhdCI6MTc3NjQzMTA3NCwianRpIjoiMTU1ZjgwYjYtM2YwMy0
+      0MDE5LWE5MzEtYWM2N2QwN2E3NzczIiwib3JnX2hhbmRsZSI6InRodXNoYW5pIn0.PcuTbY6AzLhOMBFJ4-zTRtw_jwYXT6sRfDHypc4FWJwvV2rEOLXajjxEg9pmsgXHs75GMr09rNueqCBqjT
+      _jjLJUQuHo6YtrVjc4ClpbDNKjK6Io-sviM22pN_ciYhdrZBe7_ikshl3BJ7He49xs-PbbdIGXw4zbc2QgrH61Vmvg17IrZjdKYIY6chXDHfJhOOd2bp964XiYYQ-ZjeKa22negpw4LI0cI4AQW
+      o9Qpz1Ca5vJgWUzH9cGKjM-qVnLK1phExZ2ubiBvIRUsbMil0EX7grXNO_eIRRKeUBtHOQcnr2LxioDMyypH3bZ9DhzlNWb8C4egSxsunUjWj95MQ"
+      BASE="https://580e193b-74e0-48c7-a888-2206162ffa88-prod.e1-us-east-azure.preview-dv.bijiraapis.dev/default"
+
+      # Step 6: bookAppointment
+      curl -s -w "\n%{http_code}" \
+        -X POST "${BASE}/bookings-api/v1.0/bookings" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "patient_id": "3450ef6b-3c91-4c9b-9828-c5746aec3941",
+          "provider_id": "p2000000-0001-0001-0001-000000000001",
+          "treatment_id": "t1000000-0001-0001-0001-000000000001",
+          "slot_id": "s0000001-0000-0000-0000-000000000001"
+        }')
+  ⎿  {
+       "booking_id": "2e2b3cf6-2a2e-48a3-bf85-16a0f95ea0f3",
+       "patient_id": "3450ef6b-3c91-4c9b-9828-c5746aec3941",
+       "provider_id": "p2000000-0001-0001-0001-000000000001",
+       "treatment_id": "t1000000-0001-0001-0001-000000000001",
+       "slot_id": "s0000001-0000-0000-0000-000000000001",
+       "start_time": "2026-05-01T09:00:00+10:00",
+       "end_time": "2026-05-01T10:00:00+10:00",
+       "status": "confirmed",
+       "confirmation_code": "HC-2026-7312372",
+       "created_at": "2026-04-17T13:06:55.7850683Z",
+       "updated_at": "2026-04-17T13:06:55.7850683Z"
+     }
+
+     201
+
+                                                                                                                       06:36 PM claude-sonnet-4-6
+⏺ Step 6 ✓ — Booking confirmed! Code: HC-2026-7312372, 1 May 2026 09:00 AEST. Now Step 7: sendConfirmation (email only).
+
+⏺ Bash(TOKEN="eyJ4NXQiOiI2eHBmNGtRRXhXRFFLdlNiM1NNUV94MkY5MnciLCJraWQiOiJaREJpWXpNNVkyVXhOMlE1WlRBNE1EWmlOalV6TnpaaU56TTNOMkZsTW1Nd05tTXlZalF6TVRnMVpUVml
+      ZVE5oTldNMVkyUTJNV0ZpTWpVd1pXUm1NZ19SUzI1NiIsInR5cCI6ImF0K2p3dCIsImFsZyI6IlJTMjU2In0.eyJzdWIiOiJCVkZrOEdTZnZSN0pWRWxPRURuR2l0a2ZfQkVhIiwiYXV0IjoiQV
+      BQTElDQVRJT04iLCJpc3MiOiJodHRwczovL2Rldi5hcGkuYXNnYXJkZW8uaW8vdC90aHVzaGFuaS9vYXV0aDIvdG9rZW4iLCJjbGllbnRfaWQiOiJCVkZrOEdTZnZSN0pWRWxPRURuR2l0a2ZfQ
+      kVhIiwiYXVkIjoiQlZGazhHU2Z2UjdKVkVsT0VEbkdpdGtmX0JFYSIsIm5iZiI6MTc3NjQzMTA3NCwiYXpwIjoiQlZGazhHU2Z2UjdKVkVsT0VEbkdpdGtmX0JFYSIsIm9yZ19pZCI6ImYzNGZj
+      MDExLTM4YTYtNDY2My05ZmExLTlhMjQzMDA2YzUzOCIsImV4cCI6MTc3NjQzNDY3NCwib3JnX25hbWUiOiJ0aHVzaGFuaSIsImlhdCI6MTc3NjQzMTA3NCwianRpIjoiMTU1ZjgwYjYtM2YwMy0
+      0MDE5LWE5MzEtYWM2N2QwN2E3NzczIiwib3JnX2hhbmRsZSI6InRodXNoYW5pIn0.PcuTbY6AzLhOMBFJ4-zTRtw_jwYXT6sRfDHypc4FWJwvV2rEOLXajjxEg9pmsgXHs75GMr09rNueqCBqjT
+      _jjLJUQuHo6YtrVjc4ClpbDNKjK6Io-sviM22pN_ciYhdrZBe7_ikshl3BJ7He49xs-PbbdIGXw4zbc2QgrH61Vmvg17IrZjdKYIY6chXDHfJhOOd2bp964XiYYQ-ZjeKa22negpw4LI0cI4AQW
+      o9Qpz1Ca5vJgWUzH9cGKjM-qVnLK1phExZ2ubiBvIRUsbMil0EX7grXNO_eIRRKeUBtHOQcnr2LxioDMyypH3bZ9DhzlNWb8C4egSxsunUjWj95MQ"
+      BASE="https://580e193b-74e0-48c7-a888-2206162ffa88-prod.e1-us-east-azure.preview-dv.bijiraapis.dev/default"
+
+      # Step 7: sendConfirmation
+      curl -s -w "\n%{http_code}" \
+        -X POST "${BASE}/notification-api/v1.0/notifications/confirmation" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "booking_id": "2e2b3cf6-2a2e-48a3-bf85-16a0f95ea0f3",
+          "channels": ["email"]
+        }')
+  ⎿  {
+       "notification_id": "c6704b28-3fd5-4f3f-999b-8e9b21c1661b",
+       "booking_id": "2e2b3cf6-2a2e-48a3-bf85-16a0f95ea0f3",
+       "channels_sent": [
+         "email"
+       ],
+       "status": "queued",
+       "queued_at": "2026-04-17T13:07:11.331242748Z"
+     }
+
+     202
+
+                                                                                                                       06:36 PM claude-sonnet-4-6
+⏺ Step 7 ✓ — Confirmation email queued.
+
+  ---
+  Workflow Complete
+
+  All 7 steps executed successfully. Here is the final state:
+
+  ┌───────────────────┬──────────────────────────────────────────────────────────────┐
+  │       Field       │                            Value                             │
+  ├───────────────────┼──────────────────────────────────────────────────────────────┤
+  │ Booking ID        │ 2e2b3cf6-2a2e-48a3-bf85-16a0f95ea0f3                         │
+  ├───────────────────┼──────────────────────────────────────────────────────────────┤
+  │ Confirmation Code │ HC-2026-7312372                                              │
+  ├───────────────────┼──────────────────────────────────────────────────────────────┤
+  │ Status            │ confirmed                                                    │
+  ├───────────────────┼──────────────────────────────────────────────────────────────┤
+  │ Patient           │ Jane Smith (3450ef6b-3c91-4c9b-9828-c5746aec3941)            │
+  ├───────────────────┼──────────────────────────────────────────────────────────────┤
+  │ Treatment         │ Lumbar Spinal Decompression (Orthopedics)                    │
+  ├───────────────────┼──────────────────────────────────────────────────────────────┤
+  │ Provider          │ Dr. Marcus Chen — 150 Elizabeth St, Sydney NSW 2000          │
+  ├───────────────────┼──────────────────────────────────────────────────────────────┤
+  │ Appointment       │ 1 May 2026, 09:00–10:00 AEST                                 │
+  ├───────────────────┼──────────────────────────────────────────────────────────────┤
+  │ Cost Estimate     │ AUD $1,180 gross → $420 Medicare rebate → $760 out-of-pocket │
+  ├───────────────────┼──────────────────────────────────────────────────────────────┤
+  │ Notification      │ Email queued to jane@example.com                             │
+  └───────────────────┴──────────────────────────────────────────────────────────────┘
