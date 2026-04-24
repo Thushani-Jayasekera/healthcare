@@ -55,6 +55,48 @@ func NewStore() *Store {
 	return &Store{byID: make(map[string]*Provider)}
 }
 
+// ---- Request DTOs (admin) -------------------------------------------------
+
+type CreateProviderRequest struct {
+	Name                 string   `json:"name"`
+	Type                 string   `json:"type"`
+	Specialty            string   `json:"specialty"`
+	Location             Address  `json:"location"`
+	AcceptingNewPatients bool     `json:"accepting_new_patients"`
+	Qualifications       []string `json:"qualifications,omitempty"`
+	Languages            []string `json:"languages,omitempty"`
+	Phone                string   `json:"phone,omitempty"`
+	Email                string   `json:"email,omitempty"`
+	Website              string   `json:"website,omitempty"`
+	AcceptedFunds        []string `json:"accepted_funds,omitempty"`
+	Services             []string `json:"services,omitempty"`
+	ConsultationFee      float64  `json:"consultation_fee,omitempty"`
+}
+
+type UpdateProviderRequest struct {
+	Name                 string   `json:"name,omitempty"`
+	Type                 string   `json:"type,omitempty"`
+	Specialty            string   `json:"specialty,omitempty"`
+	Location             *Address `json:"location,omitempty"`
+	Rating               *float64 `json:"rating,omitempty"`
+	AcceptingNewPatients *bool    `json:"accepting_new_patients,omitempty"`
+	DistanceKm           *float64 `json:"distance_km,omitempty"`
+	Qualifications       []string `json:"qualifications,omitempty"`
+	Languages            []string `json:"languages,omitempty"`
+	Phone                string   `json:"phone,omitempty"`
+	Email                string   `json:"email,omitempty"`
+	Website              string   `json:"website,omitempty"`
+	AcceptedFunds        []string `json:"accepted_funds,omitempty"`
+	Services             []string `json:"services,omitempty"`
+	ConsultationFee      *float64 `json:"consultation_fee,omitempty"`
+}
+
+type StatusUpdateRequest struct {
+	AcceptingNewPatients bool `json:"accepting_new_patients"`
+}
+
+// ---- Store methods --------------------------------------------------------
+
 func (s *Store) Add(p *Provider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -67,6 +109,113 @@ func (s *Store) GetByID(id string) (*Provider, bool) {
 	defer s.mu.RUnlock()
 	p, ok := s.byID[id]
 	return p, ok
+}
+
+func (s *Store) Create(id string, req CreateProviderRequest) *Provider {
+	p := &Provider{
+		ProviderID:           id,
+		Name:                 req.Name,
+		Type:                 req.Type,
+		Specialty:            req.Specialty,
+		Location:             req.Location,
+		AcceptingNewPatients: req.AcceptingNewPatients,
+		Qualifications:       req.Qualifications,
+		Languages:            req.Languages,
+		Phone:                req.Phone,
+		Email:                req.Email,
+		Website:              req.Website,
+		AcceptedFunds:        req.AcceptedFunds,
+		Services:             req.Services,
+		ConsultationFee:      req.ConsultationFee,
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.byID[p.ProviderID] = p
+	s.all = append(s.all, p)
+	return p
+}
+
+func (s *Store) Update(id string, req UpdateProviderRequest) (*Provider, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.byID[id]
+	if !ok {
+		return nil, false
+	}
+	if req.Name != "" {
+		p.Name = req.Name
+	}
+	if req.Type != "" {
+		p.Type = req.Type
+	}
+	if req.Specialty != "" {
+		p.Specialty = req.Specialty
+	}
+	if req.Location != nil {
+		p.Location = *req.Location
+	}
+	if req.Rating != nil {
+		p.Rating = *req.Rating
+	}
+	if req.AcceptingNewPatients != nil {
+		p.AcceptingNewPatients = *req.AcceptingNewPatients
+	}
+	if req.DistanceKm != nil {
+		p.DistanceKm = *req.DistanceKm
+	}
+	if req.Qualifications != nil {
+		p.Qualifications = req.Qualifications
+	}
+	if req.Languages != nil {
+		p.Languages = req.Languages
+	}
+	if req.Phone != "" {
+		p.Phone = req.Phone
+	}
+	if req.Email != "" {
+		p.Email = req.Email
+	}
+	if req.Website != "" {
+		p.Website = req.Website
+	}
+	if req.AcceptedFunds != nil {
+		p.AcceptedFunds = req.AcceptedFunds
+	}
+	if req.Services != nil {
+		p.Services = req.Services
+	}
+	if req.ConsultationFee != nil {
+		p.ConsultationFee = *req.ConsultationFee
+	}
+	return p, true
+}
+
+func (s *Store) UpdateStatus(id string, accepting bool) (*Provider, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.byID[id]
+	if !ok {
+		return nil, false
+	}
+	p.AcceptingNewPatients = accepting
+	return p, true
+}
+
+func (s *Store) Delete(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.byID[id]; !ok {
+		return false
+	}
+	delete(s.byID, id)
+	filtered := s.all[:0]
+	for _, p := range s.all {
+		if p.ProviderID != id {
+			filtered = append(filtered, p)
+		}
+	}
+	s.all = filtered
+	return true
 }
 
 func (s *Store) List(specialty, location string, acceptingOnly bool, page, limit int) ListResponse {

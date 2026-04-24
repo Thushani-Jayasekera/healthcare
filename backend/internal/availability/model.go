@@ -26,12 +26,28 @@ type AvailabilityResponse struct {
 	NextAvailableDate *string `json:"next_available_date"`
 }
 
+// ---- Request DTOs (admin) -------------------------------------------------
+
+type CreateSlotRequest struct {
+	StartTime string `json:"start_time"` // RFC3339
+	EndTime   string `json:"end_time"`   // RFC3339
+}
+
+type BatchCreateSlotsRequest struct {
+	Slots []CreateSlotRequest `json:"slots"`
+}
+
+type UpdateSlotRequest struct {
+	Status string `json:"status"` // available | blocked
+}
+
 // ---- In-memory store ------------------------------------------------------
 
 type Store struct {
-	mu          sync.Mutex
-	byID        map[string]*Slot           // slot_id → Slot
-	byProvider  map[string][]*Slot         // provider_id → []Slot
+	mu         sync.Mutex
+	byID       map[string]*Slot   // slot_id → Slot
+	byProvider map[string][]*Slot // provider_id → []Slot
+	counter    int
 }
 
 func NewStore() *Store {
@@ -46,6 +62,69 @@ func (s *Store) Add(slot *Slot) {
 	defer s.mu.Unlock()
 	s.byID[slot.SlotID] = slot
 	s.byProvider[slot.ProviderID] = append(s.byProvider[slot.ProviderID], slot)
+}
+
+func (s *Store) CreateSlot(providerID, slotID, startRFC, endRFC string) (*Slot, error) {
+	start, err := time.Parse(time.RFC3339, startRFC)
+	if err != nil {
+		return nil, fmt.Errorf("invalid start_time: %w", err)
+	}
+	end, err := time.Parse(time.RFC3339, endRFC)
+	if err != nil {
+		return nil, fmt.Errorf("invalid end_time: %w", err)
+	}
+	if !end.After(start) {
+		return nil, fmt.Errorf("end_time must be after start_time")
+	}
+	slot := &Slot{
+		SlotID:     slotID,
+		ProviderID: providerID,
+		StartTime:  start,
+		EndTime:    end,
+		Status:     "available",
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.byID[slot.SlotID] = slot
+	s.byProvider[slot.ProviderID] = append(s.byProvider[slot.ProviderID], slot)
+	return slot, nil
+}
+
+func (s *Store) DeleteSlot(slotID string) (bool, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sl, ok := s.byID[slotID]
+	if !ok {
+		return false, false
+	}
+	if sl.Status == "booked" {
+		return true, false // found but blocked
+	}
+	delete(s.byID, slotID)
+	filtered := s.byProvider[sl.ProviderID][:0]
+	for _, existing := range s.byProvider[sl.ProviderID] {
+		if existing.SlotID != slotID {
+			filtered = append(filtered, existing)
+		}
+	}
+	s.byProvider[sl.ProviderID] = filtered
+	return true, true
+}
+
+func (s *Store) UpdateSlotStatus(slotID, status string) (*Slot, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sl, ok := s.byID[slotID]
+	if !ok {
+		return nil, false
+	}
+	sl.Status = status
+	return sl, true
+}
+
+func (s *Store) nextSlotID() string {
+	s.counter++
+	return genSlotID(s.counter)
 }
 
 func (s *Store) GetByID(id string) (*Slot, bool) {
@@ -119,27 +198,29 @@ func Seed(s *Store) {
 		"p2000000-0004-0004-0004-000000000004",
 	}
 
-	slotIndex := 1
+	s.mu.Lock()
 	for _, pid := range providers {
 		for day := 0; day < 30; day++ {
-			// Weekdays only
 			d := base.AddDate(0, 0, day)
 			if d.Weekday() == time.Saturday || d.Weekday() == time.Sunday {
 				continue
 			}
 			for _, hour := range []int{9, 10, 11, 14, 15, 16} {
 				start := time.Date(d.Year(), d.Month(), d.Day(), hour, 0, 0, 0, d.Location())
-				s.Add(&Slot{
-					SlotID:     genSlotID(slotIndex),
+				s.counter++
+				slot := &Slot{
+					SlotID:     genSlotID(s.counter),
 					ProviderID: pid,
 					StartTime:  start,
 					EndTime:    start.Add(60 * time.Minute),
 					Status:     "available",
-				})
-				slotIndex++
+				}
+				s.byID[slot.SlotID] = slot
+				s.byProvider[slot.ProviderID] = append(s.byProvider[slot.ProviderID], slot)
 			}
 		}
 	}
+	s.mu.Unlock()
 }
 
 func genSlotID(n int) string {

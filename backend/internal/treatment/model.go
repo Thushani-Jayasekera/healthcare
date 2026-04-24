@@ -30,6 +30,30 @@ type SearchResponse struct {
 	Items []*Treatment `json:"items"`
 }
 
+// ---- Request DTOs (admin) -------------------------------------------------
+
+type CreateTreatmentRequest struct {
+	Name               string   `json:"name"`
+	Specialty          string   `json:"specialty"`
+	Description        string   `json:"description"`
+	DurationMin        int      `json:"duration_min"`
+	ProcedureCodes     []string `json:"procedure_codes,omitempty"`
+	Prerequisites      []string `json:"prerequisites,omitempty"`
+	RecoveryDays       int      `json:"typical_recovery_days,omitempty"`
+	RelatedSpecialties []string `json:"related_specialties,omitempty"`
+}
+
+type UpdateTreatmentRequest struct {
+	Name               string   `json:"name,omitempty"`
+	Specialty          string   `json:"specialty,omitempty"`
+	Description        string   `json:"description,omitempty"`
+	DurationMin        *int     `json:"duration_min,omitempty"`
+	ProcedureCodes     []string `json:"procedure_codes,omitempty"`
+	Prerequisites      []string `json:"prerequisites,omitempty"`
+	RecoveryDays       *int     `json:"typical_recovery_days,omitempty"`
+	RelatedSpecialties []string `json:"related_specialties,omitempty"`
+}
+
 // ---- In-memory store ------------------------------------------------------
 
 type Store struct {
@@ -54,6 +78,78 @@ func (s *Store) GetByID(id string) (*Treatment, bool) {
 	defer s.mu.RUnlock()
 	t, ok := s.byID[id]
 	return t, ok
+}
+
+func (s *Store) Create(id string, req CreateTreatmentRequest) *Treatment {
+	t := &Treatment{
+		TreatmentID:        id,
+		Name:               req.Name,
+		Specialty:          req.Specialty,
+		Description:        req.Description,
+		DurationMin:        req.DurationMin,
+		ProcedureCodes:     req.ProcedureCodes,
+		Prerequisites:      req.Prerequisites,
+		RecoveryDays:       req.RecoveryDays,
+		RelatedSpecialties: req.RelatedSpecialties,
+		UpdatedAt:          time.Now(),
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.byID[t.TreatmentID] = t
+	s.all = append(s.all, t)
+	return t
+}
+
+func (s *Store) Update(id string, req UpdateTreatmentRequest) (*Treatment, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.byID[id]
+	if !ok {
+		return nil, false
+	}
+	if req.Name != "" {
+		t.Name = req.Name
+	}
+	if req.Specialty != "" {
+		t.Specialty = req.Specialty
+	}
+	if req.Description != "" {
+		t.Description = req.Description
+	}
+	if req.DurationMin != nil {
+		t.DurationMin = *req.DurationMin
+	}
+	if req.ProcedureCodes != nil {
+		t.ProcedureCodes = req.ProcedureCodes
+	}
+	if req.Prerequisites != nil {
+		t.Prerequisites = req.Prerequisites
+	}
+	if req.RecoveryDays != nil {
+		t.RecoveryDays = *req.RecoveryDays
+	}
+	if req.RelatedSpecialties != nil {
+		t.RelatedSpecialties = req.RelatedSpecialties
+	}
+	t.UpdatedAt = time.Now()
+	return t, true
+}
+
+func (s *Store) Delete(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.byID[id]; !ok {
+		return false
+	}
+	delete(s.byID, id)
+	filtered := s.all[:0]
+	for _, t := range s.all {
+		if t.TreatmentID != id {
+			filtered = append(filtered, t)
+		}
+	}
+	s.all = filtered
+	return true
 }
 
 func (s *Store) Search(condition, specialty string, page, limit int) SearchResponse {

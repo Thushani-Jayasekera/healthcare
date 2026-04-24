@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,6 +27,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /bookings/{bookingId}", h.GetBooking)
 	mux.HandleFunc("POST /bookings/{bookingId}/cancel", h.CancelBooking)
 	mux.HandleFunc("POST /bookings/{bookingId}/reschedule", h.RescheduleBooking)
+	mux.HandleFunc("PATCH /bookings/{bookingId}/status", h.UpdateBookingStatus)
+	mux.HandleFunc("GET /providers/{providerId}/bookings", h.ListProviderBookings)
 }
 
 // POST /bookings
@@ -179,6 +182,68 @@ func (h *Handler) RescheduleBooking(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(b)
+}
+
+// GET /providers/{providerId}/bookings?status=&date_from=&date_to=&page=&limit=
+func (h *Handler) ListProviderBookings(w http.ResponseWriter, r *http.Request) {
+	providerID := r.PathValue("providerId")
+	q := r.URL.Query()
+
+	status := q.Get("status")
+	dateFrom := q.Get("date_from")
+	dateTo := q.Get("date_to")
+	page := queryInt(q.Get("page"), 1)
+	limit := queryInt(q.Get("limit"), 20)
+	if limit > 100 {
+		limit = 100
+	}
+
+	resp := h.store.ListByProvider(providerID, status, dateFrom, dateTo, page, limit)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+// PATCH /bookings/{bookingId}/status
+func (h *Handler) UpdateBookingStatus(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("bookingId")
+
+	var req StatusUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		apierror.BadRequest(w, "Invalid JSON body")
+		return
+	}
+
+	allowed := map[string]bool{"completed": true, "no_show": true}
+	if !allowed[req.Status] {
+		apierror.Unprocessable(w, "status must be 'completed' or 'no_show'",
+			apierror.FieldError{Field: "status", Message: "must be completed or no_show"})
+		return
+	}
+
+	b, ok := h.store.GetByID(id)
+	if !ok {
+		apierror.NotFound(w, fmt.Sprintf("Booking %s not found", id))
+		return
+	}
+	if b.Status == "cancelled" || b.Status == "completed" || b.Status == "no_show" {
+		apierror.Unprocessable(w, fmt.Sprintf("Cannot update status of a booking with status '%s'", b.Status))
+		return
+	}
+
+	updated, _ := h.store.UpdateStatus(id, req.Status, req.Notes)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(updated)
+}
+
+func queryInt(s string, def int) int {
+	if s == "" {
+		return def
+	}
+	v, err := strconv.Atoi(s)
+	if err != nil || v < 1 {
+		return def
+	}
+	return v
 }
 
 func newUUID() string {

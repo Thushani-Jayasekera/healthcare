@@ -1,0 +1,398 @@
+arazzo: "1.0.0"
+
+info:
+  title: Provider Administration Workflows
+  version: "1.0.0"
+  description: >
+    Arazzo workflows for healthcare provider administration — covering provider
+    onboarding, schedule initialisation, and post-appointment close-out.
+    These workflows complement the patient-facing booking workflow and are
+    intended for use by clinic administrators and admin UI backends.
+
+# ---------------------------------------------------------------------------
+# Source API references
+# ---------------------------------------------------------------------------
+sourceDescriptions:
+  - name: adminApi
+    url: ./apis/admin/openapi.json
+    type: openapi
+  - name: providersApi
+    url: ./apis/providers/openapi.json
+    type: openapi
+
+# ---------------------------------------------------------------------------
+# Workflows
+# ---------------------------------------------------------------------------
+workflows:
+
+  # ==========================================================================
+  # WORKFLOW 1 — Provider Onboarding
+  #
+  # Registers a new provider, seeds their initial availability slots, and
+  # verifies the resulting profile is visible to patient searches.
+  # ==========================================================================
+  - workflowId: onboardProvider
+    summary: End-to-end provider onboarding
+    description: >
+      Accepts full provider details and an initial set of availability slots.
+      Registers the provider, adds the slots in a single batch call, then
+      reads back the provider profile to confirm the record is queryable.
+      On failure at any step, outputs a structured error code so the admin
+      UI can surface the exact failure point.
+
+    # -----------------------------------------------------------------------
+    # Inputs
+    # -----------------------------------------------------------------------
+    inputs:
+      type: object
+      required:
+        - provider
+        - initial_slots
+      properties:
+        provider:
+          type: object
+          required: [name, type, specialty]
+          properties:
+            name:                   { type: string }
+            type:                   { type: string, enum: [doctor, hospital, clinic] }
+            specialty:              { type: string }
+            location:
+              type: object
+              properties:
+                street:   { type: string }
+                city:     { type: string }
+                state:    { type: string }
+                postcode: { type: string }
+                country:  { type: string }
+            accepting_new_patients: { type: boolean, default: true }
+            qualifications:         { type: array, items: { type: string } }
+            languages:              { type: array, items: { type: string } }
+            phone:                  { type: string }
+            email:                  { type: string, format: email }
+            website:                { type: string }
+            accepted_funds:         { type: array, items: { type: string } }
+            services:               { type: array, items: { type: string } }
+            consultation_fee:       { type: number }
+        initial_slots:
+          type: array
+          minItems: 1
+          description: Availability slots to create for the provider immediately after registration
+          items:
+            type: object
+            required: [start_time, end_time]
+            properties:
+              start_time: { type: string, format: date-time }
+              end_time:   { type: string, format: date-time }
+
+    # -----------------------------------------------------------------------
+    # Steps
+    # -----------------------------------------------------------------------
+    steps:
+
+      # ======================================================================
+      # STEP 1 — Register Provider
+      # ======================================================================
+      - stepId: registerProvider
+        description: Create the provider record via the Admin API.
+        operationId: $sourceDescriptions.adminApi#registerProvider
+        requestBody:
+          contentType: application/json
+          payload:
+            name:                   $inputs.provider.name
+            type:                   $inputs.provider.type
+            specialty:              $inputs.provider.specialty
+            location:               $inputs.provider.location
+            accepting_new_patients: $inputs.provider.accepting_new_patients
+            qualifications:         $inputs.provider.qualifications
+            languages:              $inputs.provider.languages
+            phone:                  $inputs.provider.phone
+            email:                  $inputs.provider.email
+            website:                $inputs.provider.website
+            accepted_funds:         $inputs.provider.accepted_funds
+            services:               $inputs.provider.services
+            consultation_fee:       $inputs.provider.consultation_fee
+
+        successCriteria:
+          - condition: $statusCode == 201
+
+        outputs:
+          provider_id:   $response.body.provider_id
+          provider_name: $response.body.name
+          specialty:     $response.body.specialty
+
+        onSuccess:
+          - name: proceedToSchedule
+            type: goto
+            stepId: seedAvailability
+
+        onFailure:
+          - name: registrationValidationFailed
+            type: end
+            criteria:
+              - condition: $statusCode == 422
+            outputs:
+              error_code:    "PROVIDER_VALIDATION_FAILED"
+              error_message: "Provider registration failed — check required fields (name, type, specialty)."
+          - name: registrationError
+            type: end
+            criteria:
+              - condition: $statusCode >= 400
+            outputs:
+              error_code:    "PROVIDER_REGISTRATION_ERROR"
+              error_message: "Unexpected error registering provider. Try again later."
+
+      # ======================================================================
+      # STEP 2 — Seed Availability
+      # Creates the initial set of slots for the new provider.
+      # Failure is treated as a warning — the provider record still exists.
+      # ======================================================================
+      - stepId: seedAvailability
+        description: Batch-create the initial availability slots for the new provider.
+        operationId: $sourceDescriptions.adminApi#addAvailabilitySlots
+        parameters:
+          - name: providerId
+            in: path
+            value: $steps.registerProvider.outputs.provider_id
+
+        requestBody:
+          contentType: application/json
+          payload:
+            slots: $inputs.initial_slots
+
+        successCriteria:
+          - condition: $statusCode == 201
+
+        outputs:
+          slots_created: $response.body.created
+          slots:         $response.body.slots
+
+        onSuccess:
+          - name: proceedToVerify
+            type: goto
+            stepId: verifyProviderProfile
+
+        onFailure:
+          - name: slotCreationRetry
+            type: retry
+            retryAfter: 2
+            retryLimit: 2
+            criteria:
+              - condition: $statusCode >= 500
+          - name: slotCreationWarning
+            # Non-fatal: provider is registered but slots failed; admin can retry via UI
+            type: goto
+            stepId: verifyProviderProfile
+            criteria:
+              - condition: $statusCode >= 400
+            outputs:
+              warning_code:    "SLOT_CREATION_FAILED"
+              warning_message: "Provider registered but initial slots could not be created. Add slots manually."
+
+      # ======================================================================
+      # STEP 3 — Verify Provider Profile
+      # Reads the provider back from the consumer-facing Providers API to
+      # confirm the record is indexed and searchable by patients.
+      # ======================================================================
+      - stepId: verifyProviderProfile
+        description: Confirm the new provider is visible in the consumer-facing Providers API.
+        operationId: $sourceDescriptions.providersApi#getProvider
+        parameters:
+          - name: providerId
+            in: path
+            value: $steps.registerProvider.outputs.provider_id
+
+        successCriteria:
+          - condition: $statusCode == 200
+
+        outputs:
+          verified_provider_id:   $response.body.provider_id
+          verified_name:          $response.body.name
+          verified_accepting:     $response.body.accepting_new_patients
+
+        onSuccess:
+          - name: onboardingComplete
+            type: end
+
+        onFailure:
+          - name: verificationFailed
+            type: end
+            criteria:
+              - condition: $statusCode >= 400
+            outputs:
+              warning_code:    "PROVIDER_VERIFICATION_FAILED"
+              warning_message: "Provider registered but profile could not be read back. Verify manually."
+
+    # -----------------------------------------------------------------------
+    # Workflow outputs
+    # -----------------------------------------------------------------------
+    outputs:
+      provider_id:    $steps.registerProvider.outputs.provider_id
+      provider_name:  $steps.registerProvider.outputs.provider_name
+      specialty:      $steps.registerProvider.outputs.specialty
+      slots_created:  $steps.seedAvailability.outputs.slots_created
+      accepting:      $steps.verifyProviderProfile.outputs.verified_accepting
+
+  # ==========================================================================
+  # WORKFLOW 2 — Appointment Close-Out
+  #
+  # After a confirmed appointment date has passed, this workflow:
+  #   1. Marks the booking as completed (or no-show)
+  #   2. Pulls the updated provider summary report to reflect the change
+  #
+  # Designed to be triggered by an admin UI "close appointment" action.
+  # ==========================================================================
+  - workflowId: closeOutAppointment
+    summary: Mark appointment completed or no-show and refresh provider summary
+    description: >
+      Accepts a booking ID and a terminal status (completed | no_show), updates
+      the booking record, then fetches the provider's rolling summary report so
+      the admin dashboard reflects the latest utilisation figures.
+
+    # -----------------------------------------------------------------------
+    # Inputs
+    # -----------------------------------------------------------------------
+    inputs:
+      type: object
+      required:
+        - booking_id
+        - provider_id
+        - status
+      properties:
+        booking_id:
+          type: string
+          format: uuid
+        provider_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [completed, no_show]
+        notes:
+          type: string
+          description: Optional clinical notes to attach to the booking
+        report_date_from:
+          type: string
+          format: date
+          description: Start of reporting window for the summary refresh (defaults to today)
+        report_date_to:
+          type: string
+          format: date
+          description: End of reporting window for the summary refresh (defaults to 30 days ahead)
+
+    # -----------------------------------------------------------------------
+    # Steps
+    # -----------------------------------------------------------------------
+    steps:
+
+      # ======================================================================
+      # STEP 1 — Update Booking Status
+      # ======================================================================
+      - stepId: updateBookingStatus
+        description: Set the booking to its terminal status (completed or no_show).
+        operationId: $sourceDescriptions.adminApi#updateBookingStatus
+        parameters:
+          - name: bookingId
+            in: path
+            value: $inputs.booking_id
+
+        requestBody:
+          contentType: application/json
+          payload:
+            status: $inputs.status
+            notes:  $inputs.notes
+
+        successCriteria:
+          - condition: $statusCode == 200
+
+        outputs:
+          updated_status:    $response.body.status
+          updated_at:        $response.body.updated_at
+          patient_id:        $response.body.patient_id
+          treatment_id:      $response.body.treatment_id
+
+        onSuccess:
+          - name: proceedToReport
+            type: goto
+            stepId: refreshProviderSummary
+
+        onFailure:
+          - name: alreadyClosed
+            type: end
+            criteria:
+              - condition: $statusCode == 422
+            outputs:
+              error_code:    "BOOKING_ALREADY_CLOSED"
+              error_message: "Booking is already in a terminal state and cannot be updated."
+          - name: bookingNotFound
+            type: end
+            criteria:
+              - condition: $statusCode == 404
+            outputs:
+              error_code:    "BOOKING_NOT_FOUND"
+              error_message: "No booking found with the provided ID."
+          - name: statusUpdateError
+            type: end
+            criteria:
+              - condition: $statusCode >= 400
+            outputs:
+              error_code:    "STATUS_UPDATE_ERROR"
+              error_message: "Unexpected error updating booking status."
+
+      # ======================================================================
+      # STEP 2 — Refresh Provider Summary
+      # Best-effort: report failure does not roll back the status update.
+      # ======================================================================
+      - stepId: refreshProviderSummary
+        description: Fetch updated provider utilisation summary for the admin dashboard.
+        operationId: $sourceDescriptions.adminApi#getProviderSummaryReport
+        parameters:
+          - name: providerId
+            in: path
+            value: $inputs.provider_id
+          - name: date_from
+            in: query
+            value: $inputs.report_date_from
+          - name: date_to
+            in: query
+            value: $inputs.report_date_to
+
+        successCriteria:
+          - condition: $statusCode == 200
+
+        outputs:
+          total_bookings:    $response.body.total_bookings
+          completed_count:   $response.body.by_status.completed
+          no_show_count:     $response.body.by_status.no_show
+          utilization_pct:   $response.body.utilization_pct
+          available_slots:   $response.body.available_slots
+
+        onSuccess:
+          - name: closeOutComplete
+            type: end
+
+        onFailure:
+          - name: reportRetry
+            type: retry
+            retryAfter: 3
+            retryLimit: 2
+            criteria:
+              - condition: $statusCode >= 500
+          - name: reportUnavailable
+            type: end
+            criteria:
+              - condition: $statusCode >= 400
+            outputs:
+              warning_code:    "REPORT_UNAVAILABLE"
+              warning_message: "Booking closed successfully but summary report could not be retrieved."
+
+    # -----------------------------------------------------------------------
+    # Workflow outputs
+    # -----------------------------------------------------------------------
+    outputs:
+      booking_id:       $inputs.booking_id
+      final_status:     $steps.updateBookingStatus.outputs.updated_status
+      updated_at:       $steps.updateBookingStatus.outputs.updated_at
+      total_bookings:   $steps.refreshProviderSummary.outputs.total_bookings
+      completed_count:  $steps.refreshProviderSummary.outputs.completed_count
+      no_show_count:    $steps.refreshProviderSummary.outputs.no_show_count
+      utilization_pct:  $steps.refreshProviderSummary.outputs.utilization_pct

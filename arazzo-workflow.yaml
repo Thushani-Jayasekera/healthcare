@@ -3,15 +3,13 @@ arazzo: "1.0.0"
 info:
   title: Specialist Treatment Booking Workflow
   version: "1.0.0"
-  description: >
-    Orchestrates the full patient journey across 7 independent APIs.
-    Each sourceDescription maps to a separate OpenAPI spec with its own server.
+  description: Automates the end-to-end journey of booking a specialist medical appointment — from diagnosing the right treatment for a clinical condition, to finding an available provider near the patient, confirming a slot, estimating out-of-pocket costs, and delivering a booking confirmation via email or SMS
 
 # ---------------------------------------------------------------------------
 # Source API references — each points to its own OpenAPI file
 # ---------------------------------------------------------------------------
 sourceDescriptions:
-  - name: treatmentsApi
+  - name: Treatment Api
     url: ./apis/treatments/openapi.json
     type: openapi
   - name: providersApi

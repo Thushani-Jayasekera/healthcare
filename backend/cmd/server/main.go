@@ -11,27 +11,43 @@ import (
 	"github.com/healthcare/booking/internal/patient"
 	"github.com/healthcare/booking/internal/pricing"
 	"github.com/healthcare/booking/internal/provider"
+	"github.com/healthcare/booking/internal/reports"
 	"github.com/healthcare/booking/internal/treatment"
 	"github.com/healthcare/booking/pkg/middleware"
 )
 
-// All 7 APIs are served from a single port.
-// Each API still has its own OpenAPI spec; they all share the same base URL.
+// All APIs (patient booking + provider admin) are served from a single port.
+// Each API has its own OpenAPI spec; they share the same base URL.
 //
-//   http://localhost:8080
-//     POST   /patients
-//     GET    /patients/{patientId}
-//     GET    /treatments/search
-//     GET    /treatments/{treatmentId}
-//     GET    /providers
-//     GET    /providers/{providerId}
-//     GET    /providers/{providerId}/availability
-//     GET    /pricing/estimate
-//     POST   /bookings
-//     GET    /bookings/{bookingId}
-//     POST   /bookings/{bookingId}/cancel
-//     POST   /bookings/{bookingId}/reschedule
-//     POST   /notifications/confirmation
+// Patient / Booking APIs:
+//   POST   /patients
+//   GET    /patients/{patientId}
+//   GET    /treatments/search
+//   GET    /treatments/{treatmentId}
+//   GET    /providers
+//   GET    /providers/{providerId}
+//   GET    /providers/{providerId}/availability
+//   GET    /pricing/estimate
+//   POST   /bookings
+//   GET    /bookings/{bookingId}
+//   POST   /bookings/{bookingId}/cancel
+//   POST   /bookings/{bookingId}/reschedule
+//   POST   /notifications/confirmation
+//
+// Provider Administration APIs:
+//   POST   /providers                                          (register provider)
+//   PUT    /providers/{providerId}                            (update profile)
+//   PATCH  /providers/{providerId}/status                     (toggle accepting)
+//   DELETE /providers/{providerId}                            (remove provider)
+//   POST   /providers/{providerId}/availability               (add slots)
+//   DELETE /providers/{providerId}/availability/{slotId}      (remove slot)
+//   PATCH  /providers/{providerId}/availability/{slotId}      (block/unblock slot)
+//   GET    /providers/{providerId}/bookings                   (provider dashboard)
+//   PATCH  /bookings/{bookingId}/status                       (mark completed/no-show)
+//   POST   /treatments                                        (add treatment)
+//   PUT    /treatments/{treatmentId}                          (update treatment)
+//   DELETE /treatments/{treatmentId}                          (remove treatment)
+//   GET    /providers/{providerId}/reports/summary            (admin reporting)
 
 func main() {
 	port := os.Getenv("PORT")
@@ -66,6 +82,7 @@ func main() {
 	bookingH      := booking.NewHandler(bookingStore, availStore)
 	pricingH      := pricing.NewHandler(treatmentStore, providerStore)
 	notificationH := notification.NewHandler(bookingStore)
+	reportsH      := reports.NewHandler(bookingStore, availStore)
 
 	// ------------------------------------------------------------------ //
 	// Single shared mux — all 7 APIs register their routes here
@@ -79,6 +96,7 @@ func main() {
 	bookingH.Register(mux)
 	pricingH.Register(mux)
 	notificationH.Register(mux)
+	reportsH.Register(mux)
 
 	// ------------------------------------------------------------------ //
 	// Single server
@@ -90,13 +108,19 @@ func main() {
 	)
 
 	log.Printf("Healthcare API listening on %s", addr)
-	log.Printf("  Patients API       → POST/GET  /patients")
-	log.Printf("  Treatments API     → GET        /treatments/search  /treatments/{id}")
-	log.Printf("  Providers API      → GET        /providers  /providers/{id}")
-	log.Printf("  Availability API   → GET        /providers/{id}/availability")
-	log.Printf("  Pricing API        → GET        /pricing/estimate")
-	log.Printf("  Bookings API       → POST/GET   /bookings  /bookings/{id}")
-	log.Printf("  Notifications API  → POST       /notifications/confirmation")
+	log.Printf("  [Booking]  Patients API         → POST/GET  /patients")
+	log.Printf("  [Booking]  Treatments API        → GET        /treatments/search  /treatments/{id}")
+	log.Printf("  [Booking]  Providers API         → GET        /providers  /providers/{id}")
+	log.Printf("  [Booking]  Availability API      → GET        /providers/{id}/availability")
+	log.Printf("  [Booking]  Pricing API           → GET        /pricing/estimate")
+	log.Printf("  [Booking]  Bookings API          → POST/GET   /bookings  /bookings/{id}")
+	log.Printf("  [Booking]  Notifications API     → POST       /notifications/confirmation")
+	log.Printf("  [Admin]    Provider Mgmt         → POST/PUT/PATCH/DELETE /providers")
+	log.Printf("  [Admin]    Schedule Mgmt         → POST/DELETE/PATCH /providers/{id}/availability/{slotId}")
+	log.Printf("  [Admin]    Treatment Mgmt        → POST/PUT/DELETE /treatments")
+	log.Printf("  [Admin]    Provider Dashboard    → GET /providers/{id}/bookings")
+	log.Printf("  [Admin]    Booking Status        → PATCH /bookings/{id}/status")
+	log.Printf("  [Admin]    Reports               → GET /providers/{id}/reports/summary")
 
 	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatalf("Server failed: %v", err)

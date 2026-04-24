@@ -1,0 +1,730 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Healthcare Provider Administration API",
+    "version": "1.0.0",
+    "description": "Administration API for managing healthcare providers, their availability schedules, the treatment catalog, and provider-facing booking operations. Intended for use by clinic administrators and provider onboarding workflows."
+  },
+  "servers": [
+    { "url": "http://localhost:8082", "description": "Local development" },
+    { "url": "https://api.healthcare.example.com/v1", "description": "Production" }
+  ],
+  "tags": [
+    { "name": "Provider Management", "description": "Register and manage provider profiles" },
+    { "name": "Schedule Management", "description": "Manage provider availability slots" },
+    { "name": "Treatment Catalog", "description": "Manage the treatment catalog" },
+    { "name": "Provider Dashboard", "description": "Provider-facing booking views and status updates" },
+    { "name": "Reports", "description": "Operational reporting and utilisation metrics" }
+  ],
+  "paths": {
+    "/providers": {
+      "post": {
+        "tags": ["Provider Management"],
+        "operationId": "registerProvider",
+        "summary": "Register a new provider",
+        "description": "Creates a new healthcare provider record. Used during onboarding of doctors, hospitals, and clinics.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateProviderRequest" },
+              "example": {
+                "name": "Dr. Emily Carter",
+                "type": "doctor",
+                "specialty": "Neurology",
+                "location": {
+                  "street": "10 Bridge St",
+                  "city": "Sydney",
+                  "state": "NSW",
+                  "postcode": "2000",
+                  "country": "AU"
+                },
+                "accepting_new_patients": true,
+                "qualifications": ["MBBS (USyd)", "FRACP (Neurology)"],
+                "languages": ["English", "French"],
+                "phone": "+61292009999",
+                "email": "e.carter@neurocare.com.au",
+                "accepted_funds": ["Medibank", "BUPA"],
+                "services": ["EEG", "EMG", "Botox for Migraine"],
+                "consultation_fee": 380.00
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Provider registered",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Provider" }
+              }
+            }
+          },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    },
+    "/providers/{providerId}": {
+      "put": {
+        "tags": ["Provider Management"],
+        "operationId": "updateProvider",
+        "summary": "Update provider profile",
+        "description": "Performs a partial update on any provider field. Only fields present in the request body are updated.",
+        "parameters": [
+          { "$ref": "#/components/parameters/providerId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateProviderRequest" },
+              "example": {
+                "consultation_fee": 400.00,
+                "accepted_funds": ["Medibank", "BUPA", "HCF", "NIB"],
+                "accepting_new_patients": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Provider updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Provider" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "tags": ["Provider Management"],
+        "operationId": "deleteProvider",
+        "summary": "Remove a provider",
+        "description": "Permanently removes a provider from the system. Only allowed when the provider has no confirmed future bookings.",
+        "parameters": [
+          { "$ref": "#/components/parameters/providerId" }
+        ],
+        "responses": {
+          "204": { "description": "Provider removed" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/providers/{providerId}/status": {
+      "patch": {
+        "tags": ["Provider Management"],
+        "operationId": "updateProviderStatus",
+        "summary": "Toggle provider accepting-patients status",
+        "description": "Enables or disables a provider's visibility to new patient bookings. Useful for managing capacity or temporary leave.",
+        "parameters": [
+          { "$ref": "#/components/parameters/providerId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/StatusUpdateRequest" },
+              "example": { "accepting_new_patients": false }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Provider" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/providers/{providerId}/availability": {
+      "post": {
+        "tags": ["Schedule Management"],
+        "operationId": "addAvailabilitySlots",
+        "summary": "Add availability slots for a provider",
+        "description": "Creates one or more time slots for a provider. Each slot represents a bookable appointment window. Duplicate or overlapping slots are not validated server-side — callers should avoid submitting overlapping windows.",
+        "parameters": [
+          { "$ref": "#/components/parameters/providerId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/BatchCreateSlotsRequest" },
+              "example": {
+                "slots": [
+                  { "start_time": "2026-06-02T09:00:00+10:00", "end_time": "2026-06-02T10:00:00+10:00" },
+                  { "start_time": "2026-06-02T10:00:00+10:00", "end_time": "2026-06-02T11:00:00+10:00" },
+                  { "start_time": "2026-06-02T14:00:00+10:00", "end_time": "2026-06-02T15:00:00+10:00" }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Slots created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "created": { "type": "integer", "example": 3 },
+                    "slots": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Slot" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    },
+    "/providers/{providerId}/availability/{slotId}": {
+      "delete": {
+        "tags": ["Schedule Management"],
+        "operationId": "deleteSlot",
+        "summary": "Remove an availability slot",
+        "description": "Deletes a slot that has not been booked. Returns 409 if the slot is already booked.",
+        "parameters": [
+          { "$ref": "#/components/parameters/providerId" },
+          { "$ref": "#/components/parameters/slotId" }
+        ],
+        "responses": {
+          "204": { "description": "Slot removed" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" }
+        }
+      },
+      "patch": {
+        "tags": ["Schedule Management"],
+        "operationId": "updateSlotStatus",
+        "summary": "Block or unblock a slot",
+        "description": "Changes a slot's status between `available` and `blocked`. Blocked slots are hidden from patients but remain in the system.",
+        "parameters": [
+          { "$ref": "#/components/parameters/providerId" },
+          { "$ref": "#/components/parameters/slotId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateSlotRequest" },
+              "example": { "status": "blocked" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Slot updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Slot" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/treatments": {
+      "post": {
+        "tags": ["Treatment Catalog"],
+        "operationId": "createTreatment",
+        "summary": "Add a treatment to the catalog",
+        "description": "Creates a new treatment entry that providers can offer and patients can search for.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateTreatmentRequest" },
+              "example": {
+                "name": "Rotator Cuff Repair",
+                "specialty": "Orthopedics",
+                "description": "Surgical repair of torn rotator cuff tendons in the shoulder.",
+                "duration_min": 90,
+                "procedure_codes": ["MBS-49539"],
+                "prerequisites": ["Orthopaedic referral", "MRI shoulder"],
+                "typical_recovery_days": 90,
+                "related_specialties": ["Physiotherapy", "Sports Medicine"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Treatment created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Treatment" }
+              }
+            }
+          },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    },
+    "/treatments/{treatmentId}": {
+      "put": {
+        "tags": ["Treatment Catalog"],
+        "operationId": "updateTreatment",
+        "summary": "Update a treatment",
+        "description": "Performs a partial update on a treatment. Only fields present in the request body are changed.",
+        "parameters": [
+          { "$ref": "#/components/parameters/treatmentId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateTreatmentRequest" },
+              "example": {
+                "duration_min": 100,
+                "typical_recovery_days": 84
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Treatment updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Treatment" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "tags": ["Treatment Catalog"],
+        "operationId": "deleteTreatment",
+        "summary": "Remove a treatment from the catalog",
+        "description": "Removes a treatment. Existing bookings that reference this treatment are not affected.",
+        "parameters": [
+          { "$ref": "#/components/parameters/treatmentId" }
+        ],
+        "responses": {
+          "204": { "description": "Treatment removed" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/providers/{providerId}/bookings": {
+      "get": {
+        "tags": ["Provider Dashboard"],
+        "operationId": "listProviderBookings",
+        "summary": "List bookings for a provider",
+        "description": "Returns a paginated list of all bookings assigned to the specified provider. Supports filtering by booking status and date range for use in provider-facing scheduling dashboards.",
+        "parameters": [
+          { "$ref": "#/components/parameters/providerId" },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["confirmed", "pending", "cancelled", "completed", "rescheduled", "no_show"]
+            },
+            "description": "Filter by booking status"
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" },
+            "description": "Start of date range (inclusive), format YYYY-MM-DD"
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" },
+            "description": "End of date range (inclusive), format YYYY-MM-DD"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 20, "maximum": 100 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of bookings",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/BookingListResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bookings/{bookingId}/status": {
+      "patch": {
+        "tags": ["Provider Dashboard"],
+        "operationId": "updateBookingStatus",
+        "summary": "Mark a booking as completed or no-show",
+        "description": "Allows a provider or admin to close out a booking after the appointment date. Accepted terminal statuses are `completed` (appointment occurred) and `no_show` (patient did not attend).",
+        "parameters": [
+          { "$ref": "#/components/parameters/bookingId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/BookingStatusUpdateRequest" },
+              "example": {
+                "status": "completed",
+                "notes": "Procedure successful; follow-up in 2 weeks."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Booking updated",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Booking" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "422": { "$ref": "#/components/responses/ValidationError" }
+        }
+      }
+    },
+    "/providers/{providerId}/reports/summary": {
+      "get": {
+        "tags": ["Reports"],
+        "operationId": "getProviderSummaryReport",
+        "summary": "Get provider utilisation and booking summary",
+        "description": "Returns aggregate booking counts by status, available vs booked slot counts, and utilisation percentage for a provider within a given date range. Defaults to the current month if no dates provided.",
+        "parameters": [
+          { "$ref": "#/components/parameters/providerId" },
+          {
+            "name": "date_from",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" },
+            "description": "Start of reporting period (YYYY-MM-DD), defaults to today"
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" },
+            "description": "End of reporting period (YYYY-MM-DD), defaults to 30 days ahead"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Provider summary report",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ProviderSummaryReport" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "providerId": {
+        "name": "providerId",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "format": "uuid" },
+        "description": "Unique provider identifier"
+      },
+      "slotId": {
+        "name": "slotId",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string" },
+        "description": "Unique availability slot identifier"
+      },
+      "treatmentId": {
+        "name": "treatmentId",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "format": "uuid" },
+        "description": "Unique treatment identifier"
+      },
+      "bookingId": {
+        "name": "bookingId",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "format": "uuid" },
+        "description": "Unique booking identifier"
+      }
+    },
+    "schemas": {
+      "Address": {
+        "type": "object",
+        "properties": {
+          "street":   { "type": "string" },
+          "city":     { "type": "string" },
+          "state":    { "type": "string" },
+          "postcode": { "type": "string" },
+          "country":  { "type": "string" }
+        }
+      },
+      "Provider": {
+        "type": "object",
+        "properties": {
+          "provider_id":             { "type": "string", "format": "uuid" },
+          "name":                    { "type": "string" },
+          "type":                    { "type": "string", "enum": ["doctor", "hospital", "clinic"] },
+          "specialty":               { "type": "string" },
+          "location":                { "$ref": "#/components/schemas/Address" },
+          "rating":                  { "type": "number", "format": "float" },
+          "accepting_new_patients":  { "type": "boolean" },
+          "distance_km":             { "type": "number" },
+          "qualifications":          { "type": "array", "items": { "type": "string" } },
+          "languages":               { "type": "array", "items": { "type": "string" } },
+          "phone":                   { "type": "string" },
+          "email":                   { "type": "string", "format": "email" },
+          "website":                 { "type": "string", "format": "uri" },
+          "accepted_funds":          { "type": "array", "items": { "type": "string" } },
+          "services":                { "type": "array", "items": { "type": "string" } },
+          "consultation_fee":        { "type": "number", "format": "float" }
+        }
+      },
+      "CreateProviderRequest": {
+        "type": "object",
+        "required": ["name", "type", "specialty"],
+        "properties": {
+          "name":                    { "type": "string" },
+          "type":                    { "type": "string", "enum": ["doctor", "hospital", "clinic"] },
+          "specialty":               { "type": "string" },
+          "location":                { "$ref": "#/components/schemas/Address" },
+          "accepting_new_patients":  { "type": "boolean", "default": true },
+          "qualifications":          { "type": "array", "items": { "type": "string" } },
+          "languages":               { "type": "array", "items": { "type": "string" } },
+          "phone":                   { "type": "string" },
+          "email":                   { "type": "string", "format": "email" },
+          "website":                 { "type": "string", "format": "uri" },
+          "accepted_funds":          { "type": "array", "items": { "type": "string" } },
+          "services":                { "type": "array", "items": { "type": "string" } },
+          "consultation_fee":        { "type": "number", "format": "float" }
+        }
+      },
+      "UpdateProviderRequest": {
+        "type": "object",
+        "properties": {
+          "name":                    { "type": "string" },
+          "type":                    { "type": "string", "enum": ["doctor", "hospital", "clinic"] },
+          "specialty":               { "type": "string" },
+          "location":                { "$ref": "#/components/schemas/Address" },
+          "rating":                  { "type": "number", "format": "float" },
+          "accepting_new_patients":  { "type": "boolean" },
+          "distance_km":             { "type": "number" },
+          "qualifications":          { "type": "array", "items": { "type": "string" } },
+          "languages":               { "type": "array", "items": { "type": "string" } },
+          "phone":                   { "type": "string" },
+          "email":                   { "type": "string", "format": "email" },
+          "website":                 { "type": "string", "format": "uri" },
+          "accepted_funds":          { "type": "array", "items": { "type": "string" } },
+          "services":                { "type": "array", "items": { "type": "string" } },
+          "consultation_fee":        { "type": "number", "format": "float" }
+        }
+      },
+      "StatusUpdateRequest": {
+        "type": "object",
+        "required": ["accepting_new_patients"],
+        "properties": {
+          "accepting_new_patients": { "type": "boolean" }
+        }
+      },
+      "Slot": {
+        "type": "object",
+        "properties": {
+          "slot_id":     { "type": "string" },
+          "provider_id": { "type": "string", "format": "uuid" },
+          "start_time":  { "type": "string", "format": "date-time" },
+          "end_time":    { "type": "string", "format": "date-time" },
+          "status":      { "type": "string", "enum": ["available", "held", "booked", "blocked"] }
+        }
+      },
+      "BatchCreateSlotsRequest": {
+        "type": "object",
+        "required": ["slots"],
+        "properties": {
+          "slots": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["start_time", "end_time"],
+              "properties": {
+                "start_time": { "type": "string", "format": "date-time", "description": "RFC3339 timestamp" },
+                "end_time":   { "type": "string", "format": "date-time", "description": "RFC3339 timestamp" }
+              }
+            }
+          }
+        }
+      },
+      "UpdateSlotRequest": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "type": "string", "enum": ["available", "blocked"] }
+        }
+      },
+      "Treatment": {
+        "type": "object",
+        "properties": {
+          "treatment_id":           { "type": "string", "format": "uuid" },
+          "name":                   { "type": "string" },
+          "specialty":              { "type": "string" },
+          "description":            { "type": "string" },
+          "duration_min":           { "type": "integer" },
+          "procedure_codes":        { "type": "array", "items": { "type": "string" } },
+          "prerequisites":          { "type": "array", "items": { "type": "string" } },
+          "typical_recovery_days":  { "type": "integer" },
+          "related_specialties":    { "type": "array", "items": { "type": "string" } },
+          "updated_at":             { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateTreatmentRequest": {
+        "type": "object",
+        "required": ["name", "specialty", "duration_min"],
+        "properties": {
+          "name":                   { "type": "string" },
+          "specialty":              { "type": "string" },
+          "description":            { "type": "string" },
+          "duration_min":           { "type": "integer", "minimum": 1 },
+          "procedure_codes":        { "type": "array", "items": { "type": "string" } },
+          "prerequisites":          { "type": "array", "items": { "type": "string" } },
+          "typical_recovery_days":  { "type": "integer", "minimum": 0 },
+          "related_specialties":    { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "UpdateTreatmentRequest": {
+        "type": "object",
+        "properties": {
+          "name":                   { "type": "string" },
+          "specialty":              { "type": "string" },
+          "description":            { "type": "string" },
+          "duration_min":           { "type": "integer", "minimum": 1 },
+          "procedure_codes":        { "type": "array", "items": { "type": "string" } },
+          "prerequisites":          { "type": "array", "items": { "type": "string" } },
+          "typical_recovery_days":  { "type": "integer", "minimum": 0 },
+          "related_specialties":    { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "Booking": {
+        "type": "object",
+        "properties": {
+          "booking_id":        { "type": "string", "format": "uuid" },
+          "patient_id":        { "type": "string", "format": "uuid" },
+          "provider_id":       { "type": "string", "format": "uuid" },
+          "treatment_id":      { "type": "string", "format": "uuid" },
+          "slot_id":           { "type": "string" },
+          "start_time":        { "type": "string", "format": "date-time" },
+          "end_time":          { "type": "string", "format": "date-time" },
+          "status":            { "type": "string", "enum": ["confirmed", "pending", "cancelled", "completed", "rescheduled", "no_show"] },
+          "notes":             { "type": "string" },
+          "referral_id":       { "type": "string" },
+          "confirmation_code": { "type": "string" },
+          "created_at":        { "type": "string", "format": "date-time" },
+          "updated_at":        { "type": "string", "format": "date-time" }
+        }
+      },
+      "BookingListResponse": {
+        "type": "object",
+        "properties": {
+          "total": { "type": "integer" },
+          "page":  { "type": "integer" },
+          "limit": { "type": "integer" },
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/Booking" } }
+        }
+      },
+      "BookingStatusUpdateRequest": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "type": "string", "enum": ["completed", "no_show"] },
+          "notes":  { "type": "string" }
+        }
+      },
+      "ProviderSummaryReport": {
+        "type": "object",
+        "properties": {
+          "provider_id":      { "type": "string", "format": "uuid" },
+          "period_from":      { "type": "string", "format": "date" },
+          "period_to":        { "type": "string", "format": "date" },
+          "total_bookings":   { "type": "integer" },
+          "by_status": {
+            "type": "object",
+            "properties": {
+              "confirmed":   { "type": "integer" },
+              "completed":   { "type": "integer" },
+              "cancelled":   { "type": "integer" },
+              "rescheduled": { "type": "integer" },
+              "no_show":     { "type": "integer" },
+              "pending":     { "type": "integer" }
+            }
+          },
+          "available_slots":  { "type": "integer" },
+          "booked_slots":     { "type": "integer" },
+          "utilization_pct":  { "type": "number", "format": "float", "description": "Percentage of slots that are booked (0–100)" }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error":   { "type": "string" },
+          "message": { "type": "string" },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field":   { "type": "string" },
+                "message": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Bad request",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "NotFound": {
+        "description": "Resource not found",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "Conflict": {
+        "description": "Conflict — resource state prevents this operation",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "ValidationError": {
+        "description": "Validation error",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      }
+    }
+  }
+}
